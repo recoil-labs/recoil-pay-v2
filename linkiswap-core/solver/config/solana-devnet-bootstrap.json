@@ -1,0 +1,50 @@
+{
+  "_comment": "Solana devnet bootstrap config for OIF solver non-EVM support (Phase 1).",
+  "_comment2": "Virtual chain ID 9000000002 represents Solana devnet internally.",
+  "networks": {
+    "9000000002": {
+      "name": "solana-devnet",
+      "chain_family": "solana",
+      "rpc_urls": [
+        { "http": "https://api.devnet.solana.com" }
+      ],
+      "tokens": [
+        {
+          "symbol": "USDC",
+          "address": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+          "decimals": 6,
+          "name": "USD Coin (Solana Devnet)"
+        },
+        {
+          "symbol": "SOL",
+          "address": "So11111111111111111111111111111111111111112",
+          "decimals": 9,
+          "name": "Wrapped SOL"
+        }
+      ]
+    }
+  },
+  "accounts": {
+    "solana_devnet": {
+      "implementation": "solana",
+      "config": {
+        "_comment": "Set one of keypair_base58 or secret_key_hex. Do NOT commit real keys.",
+        "keypair_base58": "${SOLANA_DEVNET_KEYPAIR_BASE58}"
+      }
+    }
+  },
+  "delivery": {
+    "solana_devnet": {
+      "implementation": "solana",
+      "config": {
+        "rpc_url": "${SOLANA_DEVNET_RPC_URL:-https://api.devnet.solana.com}",
+        "commitment": "confirmed",
+        "chain_id": 9000000002
+      }
+    }
+  },
+  "per_network_signers": {
+    "9000000002": "solana_devnet"
+  },
+  "supported_as_destination": [9000000002]
+}

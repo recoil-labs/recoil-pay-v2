@@ -1,0 +1,134 @@
+{
+  "nav": {
+    "how": "So funktioniert's",
+    "marketplace": "Marktplatz",
+    "features": "Funktionen",
+    "vision": "Vision",
+    "roadmap": "Roadmap",
+    "docs": "Benutzerhandbuch",
+    "launchApp": "App starten",
+    "connectWallet": "Wallet verbinden"
+  },
+  "hero": {
+    "eyebrow": "Intentionsbasierte Finanzausführung",
+    "h1Line1": "Sagen Sie uns, was Sie",
+    "h1Line2": "tun möchten.",
+    "h1Gradient": "Den Rest erledigen wir.",
+    "subtitle": "LinkiSwap verwandelt komplexe Blockchain-Transaktionen in einfache Finanzergebnisse. Kaufen, verkaufen, tauschen, senden und auszahlen — ohne sich um Chains, Bridges oder Gas zu sorgen.",
+    "ctaPrimary": "App starten",
+    "ctaSecondary": "V2 erkunden →",
+    "trustLine": "12+ Chains · 0 Bridges zu verwalten · kein Gas-Management"
+  },
+  "stats": {
+    "volume": "Verarbeitetes Volumen",
+    "chains": "Unterstützte Chains",
+    "settlement": "Durchschn. Abwicklung",
+    "solvers": "Solver pro Intent"
+  },
+  "trust": {
+    "built": "Aufgebaut auf dem Open Intents Framework"
+  },
+  "problem": {
+    "label": "Das Problem",
+    "h2": "Digitale Finanzen sind kaputt.",
+    "desc": "Jede Transaktion erfordert Expertenwissen — Chains auswählen, Bridges verwalten, Gas berechnen. Diese Komplexität gehört in die Infrastruktur, nicht in Ihre Hände.",
+    "pains": ["Netzwerke auswählen", "Assets bridgen", "Gas verwalten", "Routen vergleichen", "Apps wechseln", "Bestätigungen verfolgen"]
+  },
+  "solution": {
+    "label": "Der Wandel",
+    "h2Line1": "Sagen Sie, was Sie wollen.",
+    "h2Line2": "Wir kümmern uns um den Rest.",
+    "beforeLabel": "Vorher · Der alte Weg",
+    "afterLabel": "Nachher · Einfach sagen",
+    "before": ["Chain wählen", "Bridge wählen", "Route wählen", "Gas bezahlen", "Ausführen"],
+    "after": ["100 € an Max senden", "USDC gegen ETH tauschen", "Auf mein Konto auszahlen", "Eine Geschenkkarte kaufen"],
+    "note": "LinkiSwap findet automatisch den optimalen Ausführungsweg."
+  },
+  "how": {
+    "label": "So Funktioniert's",
+    "h2": "Auf Intents aufgebaut.",
+    "steps": [
+      { "title": "Intent erstellen", "desc": "Sagen Sie LinkiSwap in einfachen Worten, was Sie erreichen möchten." },
+      { "title": "Ausführung finden", "desc": "Der Marktplatz findet den besten Weg auf jeder Chain." },
+      { "title": "Solver konkurrieren", "desc": "Mehrere Solver bieten auf Ihren Intent — der schnellste und günstigste gewinnt." },
+      { "title": "Abwicklung", "desc": "Assets kommen genau dort an, wo sie hinmüssen." }
+    ]
+  },
+  "market": {
+    "label": "Solver-Marktplatz",
+    "h2": "Ein offener Markt, auf dem Ausführung für Sie konkurriert.",
+    "desc": "Jeder Intent wird an einen Wettbewerbsmarkt übertragen. Solver konkurrieren um die beste Ausführung — Sie erhalten immer das Gewinngebot.",
+    "benefits": ["Bessere Preise", "Schnellere Ausführung", "Tiefere Liquidität", "Mehr Zuverlässigkeit"],
+    "userIntent": "Nutzer-Intent",
+    "marketplaceLabel": "LinkiSwap Marktplatz",
+    "winner": "✓ Beste Ausführung gewinnt",
+    "routeNote": "Beste Route · von Solvern gewählt",
+    "solversNote": "●●● 3 Solver konkurrieren"
+  },
+  "features": {
+    "label": "Eine Plattform",
+    "h2": "Alles, was Sie brauchen, um Geld zu bewegen.",
+    "items": [
+      { "title": "Cross-Chain-Swaps", "desc": "Verschieben Sie Assets in einem Schritt zwischen Blockchain-Ökosystemen." },
+      { "title": "Senden", "desc": "Übertragen Sie Werte an jeden, weltweit, auf jeder Chain." },
+      { "title": "Kaufen und verkaufen", "desc": "Zugang zu digitalen Assets mit vertrauten Zahlungsmethoden." },
+      { "title": "Auszahlen", "desc": "Konvertieren Sie digitale Assets in Landeswährung, auf Ihr Konto." },
+      { "title": "Geschenkkarten", "desc": "Geben Sie digitale Assets für Produkte und Dienstleistungen aus." },
+      { "title": "Intent-Ausführung", "desc": "Fokus auf Ergebnisse — niemals auf Infrastruktur." }
+    ]
+  },
+  "vision": {
+    "label": "Die Vision",
+    "h2": "Aufbau der Finanzausführungsschicht für digitale Assets.",
+    "tagline": "Das Internet hat Suchmaschinen. · Die Cloud hat Infrastruktur. ·",
+    "taglineHighlight": "Digitale Assets brauchen eine Ausführungsschicht.",
+    "desc": "LinkiSwap ist die Infrastruktur, die Nutzer, Liquiditätsanbieter und Solver in einem einheitlichen Netzwerk verbindet."
+  },
+  "roadmap": {
+    "label": "Roadmap",
+    "h2": "Was als Nächstes kommt.",
+    "phases": [
+      { "version": "V1", "status": "LIVE", "title": "Multi-Chain-Aggregation", "desc": "Swap, Senden, Kaufen & Verkaufen — das Live-Produkt." },
+      { "version": "V2", "status": "IN ENTWICKLUNG", "title": "Intent-basierte Ausführung", "desc": "Ergebnisorientierte Finanzen auf dem Open Intents Framework." },
+      { "version": "V3", "status": "IN PLANUNG", "title": "Solver-Marktplatz", "desc": "Offener Wettbewerb für jede Ausführung." },
+      { "version": "V4", "status": "VISION", "title": "Offenes Ausführungsnetzwerk", "desc": "Eine einheitliche, programmierbare Finanzschicht." }
+    ]
+  },
+  "cta": {
+    "h2Line1": "Hören Sie auf zu transagieren.",
+    "h2Line2": "Fangen Sie an, Ergebnisse zu erzielen.",
+    "desc": "Sagen Sie LinkiSwap, was Sie tun möchten. Wir finden heraus, wie.",
+    "launchApp": "App starten",
+    "docs": "Dokumentation lesen →"
+  },
+  "footer": {
+    "tagline": "Intentionsbasierte Finanzen",
+    "links": { "app": "App", "docs": "Docs", "solvers": "Solver", "twitter": "X / Twitter", "github": "GitHub" },
+    "copyright": "© 2026 LinkiSwap"
+  },
+  "intentBar": {
+    "phrases": [
+      "100 € an Max senden",
+      "USDC gegen ETH tauschen",
+      "Auf mein Konto auszahlen",
+      "50-€-Geschenkkarte kaufen",
+      "ETH nach Solana bridgen"
+    ]
+  },
+  "widget": {
+    "tabs": { "swap": "Tauschen", "send": "Senden", "buy": "Kaufen", "sell": "Verkaufen" },
+    "youPay": "Sie zahlen",
+    "youReceive": "Sie erhalten",
+    "youSend": "Sie senden",
+    "recipient": "Empfänger",
+    "recipientPlaceholder": "@max, ENS, Adresse oder E-Mail",
+    "sendNote": "Kommt auf der bevorzugten Chain des Empfängers an.",
+    "card": "💳 Karte",
+    "cashOutTo": "Auszahlen auf",
+    "bank": "🏦 Bank · EUR",
+    "routeNote": "Beste Route · von Solvern gewählt",
+    "solversNote": "●●● 3 Solver konkurrieren",
+    "actionBuy": "{{token}} kaufen",
+    "actionCashOut": "Auszahlen"
+  }
+}

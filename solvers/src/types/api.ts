@@ -1,0 +1,17 @@
+export interface ApiError {
+    error: string;
+    code: string;
+}
+
+export const ERROR_CODES = {
+    BAD_REQUEST: 'BAD_REQUEST',
+    NOT_FOUND: 'NOT_FOUND',
+    INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
+    INVALID_MFA_CODE: 'INVALID_MFA_CODE',
+    ELEVATION_REQUIRED: 'ELEVATION_REQUIRED',
+    PERMISSION_DENIED: 'PERMISSION_DENIED',
+    INVITE_EXPIRED: 'INVITE_EXPIRED',
+    TOKEN_EXPIRED: 'TOKEN_EXPIRED',
+} as const;
+
+export type ErrorCode = typeof ERROR_CODES[keyof typeof ERROR_CODES];

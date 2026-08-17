@@ -1,0 +1,97 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/solver-account",
+    "crates/solver-bridge",
+    "crates/solver-config",
+    "crates/solver-core",
+    "crates/solver-delivery",
+    "crates/solver-demo",
+    "crates/solver-discovery",
+    "crates/solver-e2e-tests",
+    "crates/solver-order",
+    "crates/solver-pricing",
+    "crates/solver-service",
+    "crates/solver-settlement",
+    "crates/solver-storage",
+    "crates/solver-types",
+]
+default-members = ["crates/solver-service", "crates/solver-demo"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88.0"
+authors = [
+    "nahim.terrazas@openzeppelin.com",
+    "nami@openzeppelin.com",
+    "nicolas.molina@openzeppelin.com",
+]
+license = "MIT"
+repository = "https://github.com/openintentsframework/oif-solver"
+
+[workspace.dependencies]
+alloy = "1.0.37"
+alloy-consensus = "1.0.37"
+alloy-contract = "1.0.37"
+alloy-dyn-abi = "1.0.37"
+alloy-network = "1.0.37"
+alloy-primitives = "1.0.37"
+alloy-provider = "1.0.37"
+alloy-rpc-client = "1.0.37"
+alloy-rpc-types = "1.0.37"
+alloy-signer = "1.0.37"
+alloy-signer-aws = "1.0.37"
+alloy-signer-local = "1.0.37"
+alloy-sol-types = "1.0.37"
+alloy-transport = "1.0.37"
+alloy-transport-http = "1.0.37"
+anyhow = "1.0"
+arc-swap = "1.7"
+async-stream = "0.3"
+async-trait = "0.1"
+
+# AWS dependencies (for KMS signer)
+# Minimum versions that fix CVE GHSA-g59m-gf8j-gjf5 (region validation flaw)
+aws-config = "1.8"
+aws-sdk-kms = "1.93"
+axum = "0.8.4"
+backoff = { version = "0.4", features = ["tokio"] }
+bytes = "1.8"
+chrono = "0.4"
+clap = { version = "4.5", features = ["derive", "env"] }
+dashmap = "6.0"
+futures = "0.3"
+hex = "0.4"
+mockall = "0.13"
+priority-queue = "2.0"
+reqwest = { version = "0.12.22", features = ["json"] }
+rust_decimal = { version = "1.35", features = ["serde", "serde-with-str"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+sha3 = "0.10"
+tempfile = "3.0"
+thiserror = "2.0.12"
+tokio = { version = "1.40", features = ["full"] }
+tokio-stream = "0.1"
+tower = "0.5.2"
+tower-http = { version = "0.6.6", features = ["trace", "cors"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+uuid = { version = "1.10", features = ["v4", "serde"] }
+validator = { version = "0.20", features = ["derive"] }
+
+# ── Solana non-EVM support ─────────────────────────────────────────────────────
+# solana-client/sdk 2.x require Rust ≥ 1.79, well above our 1.88.0 workspace floor.
+solana-client       = "2.2"
+solana-sdk          = "2.2"
+solana-transaction-status = "2.2"
+spl-token           = { version = "7.0", features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "6.0", features = ["no-entrypoint"] }
+bs58                = "0.5"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #08122a;
+  --color-surface: #08122a;
+  --color-surface-container-lowest: #030d25;
+  --color-surface-container-low: #111b33;
+  --color-surface-container: #151f37;
+  --color-surface-container-high: #1f2942;
+  --color-surface-container-highest: #2a344e;
+  --color-surface-bright: #2f3952;
+  
+  --color-primary: #424af6;
+  --color-primary-container: #424af6;
+  --color-primary-fixed: #e0e0ff;
+  --color-primary-glow: rgba(66, 74, 246, 0.3);
+
+  --color-on-background: #dae2ff;
+  --color-on-surface: #dae2ff;
+  --color-on-surface-variant: #c6c5d9;
+  --color-outline: #8f8fa2;
+  --color-outline-variant: #454556;
+  
+  --color-tertiary: #ffb59b;
+  --color-tertiary-container: #b33b00;
+  --color-error: #ffb4ab;
+  --color-error-container: #93000a;
+
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-headline: 'Hanken Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+@layer base {
+  body {
+    background-color: #08122a;
+    color: #dae2ff;
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Glass Panel Styling */
+.glass-panel {
+  background: rgba(232, 235, 247, 0.04);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(232, 235, 247, 0.12);
+}
+
+.font-headline-lg {
+  font-family: 'Hanken Grotesk', sans-serif;
+}
+
+.font-label-md, .font-label-sm {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #454556;
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #8f8fa2;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #454556;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8f8fa2;
+}
+
+/* Material Symbols Outlined Alignment */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+  display: inline-block;
+  line-height: 1;
+}
+
+/* Active Pulse Animation */
+@keyframes pulseGlow {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.1); }
+}
+
+.pulse-active {
+  animation: pulseGlow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

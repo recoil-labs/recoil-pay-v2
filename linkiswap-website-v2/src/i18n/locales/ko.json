@@ -1,0 +1,134 @@
+{
+  "nav": {
+    "how": "작동 방식",
+    "marketplace": "마켓플레이스",
+    "features": "기능",
+    "vision": "비전",
+    "roadmap": "로드맵",
+    "docs": "사용자 가이드",
+    "launchApp": "앱 시작",
+    "connectWallet": "지갑 연결"
+  },
+  "hero": {
+    "eyebrow": "인텐트 기반 금융 실행",
+    "h1Line1": "원하는 것을",
+    "h1Line2": "말씀해 주세요.",
+    "h1Gradient": "나머지는 저희가 처리합니다.",
+    "subtitle": "LinkiSwap은 복잡한 블록체인 거래를 간단한 금융 결과로 바꿉니다. 체인, 브릿지, 가스 걱정 없이 구매, 판매, 스왑, 전송, 출금이 가능합니다.",
+    "ctaPrimary": "앱 시작",
+    "ctaSecondary": "V2 탐색 →",
+    "trustLine": "12개 이상의 체인 · 브릿지 관리 불필요 · 가스 걱정 없음"
+  },
+  "stats": {
+    "volume": "처리 거래량",
+    "chains": "지원 체인 수",
+    "settlement": "평균 정산 시간",
+    "solvers": "인텐트당 솔버 수"
+  },
+  "trust": {
+    "built": "Open Intents Framework 기반으로 구축"
+  },
+  "problem": {
+    "label": "문제점",
+    "h2": "디지털 금융은 복잡합니다.",
+    "desc": "모든 거래에는 전문 지식이 필요합니다 — 체인 선택, 브릿지 관리, 가스 계산. 이 복잡성은 인프라가 담당해야 하지, 당신의 몫이 아닙니다.",
+    "pains": ["네트워크 선택", "자산 브릿지", "가스 관리", "경로 비교", "앱 전환", "확인 추적"]
+  },
+  "solution": {
+    "label": "변화",
+    "h2Line1": "원하는 것을 말씀하세요.",
+    "h2Line2": "나머지는 저희가 처리합니다.",
+    "beforeLabel": "이전 · 기존 방식",
+    "afterLabel": "이후 · 그냥 말하세요",
+    "before": ["체인 선택", "브릿지 선택", "경로 선택", "가스 납부", "실행"],
+    "after": ["민준에게 $100 전송", "USDC를 ETH로 스왑", "내 계좌로 출금", "기프트카드 구매"],
+    "note": "LinkiSwap이 자동으로 최적의 실행 경로를 찾습니다."
+  },
+  "how": {
+    "label": "작동 방식",
+    "h2": "인텐트를 중심으로 구축.",
+    "steps": [
+      { "title": "인텐트 생성", "desc": "원하는 결과를 간단한 말로 LinkiSwap에 전달하세요." },
+      { "title": "실행 발견", "desc": "마켓플레이스가 모든 체인에서 최적의 경로를 찾습니다." },
+      { "title": "솔버 경쟁", "desc": "여러 솔버가 인텐트 이행을 위해 입찰하며, 가장 빠르고 저렴한 솔버가 선택됩니다." },
+      { "title": "정산 완료", "desc": "자산이 정확히 필요한 곳에 도착합니다." }
+    ]
+  },
+  "market": {
+    "label": "솔버 마켓플레이스",
+    "h2": "당신을 위해 실행이 경쟁하는 오픈 마켓.",
+    "desc": "모든 인텐트는 경쟁적인 마켓플레이스에 브로드캐스트됩니다. 솔버들이 최고의 실행을 제공하기 위해 경쟁하며, 항상 최선의 입찰을 받습니다.",
+    "benefits": ["더 좋은 가격", "더 빠른 실행", "더 깊은 유동성", "더 높은 신뢰성"],
+    "userIntent": "사용자 인텐트",
+    "marketplaceLabel": "LinkiSwap 마켓플레이스",
+    "winner": "✓ 최적 실행 승리",
+    "routeNote": "최적 경로 · 솔버가 선정",
+    "solversNote": "●●● 솔버 3개 경쟁 중"
+  },
+  "features": {
+    "label": "올인원 플랫폼",
+    "h2": "자금 이동에 필요한 모든 것.",
+    "items": [
+      { "title": "크로스체인 스왑", "desc": "한 단계로 블록체인 생태계 간 자산 이동." },
+      { "title": "전송", "desc": "모든 체인에서 전 세계 누구에게나 가치 전달." },
+      { "title": "구매 및 판매", "desc": "익숙한 결제 방법으로 디지털 자산에 접근." },
+      { "title": "출금", "desc": "디지털 자산을 현지 통화로 전환하여 은행 계좌로." },
+      { "title": "기프트카드", "desc": "디지털 자산으로 실물 제품 및 서비스 구매." },
+      { "title": "인텐트 실행", "desc": "인프라가 아닌 결과에 집중." }
+    ]
+  },
+  "vision": {
+    "label": "비전",
+    "h2": "디지털 자산을 위한 금융 실행 레이어 구축.",
+    "tagline": "인터넷에는 검색 엔진이 있습니다. · 클라우드에는 인프라가 있습니다. ·",
+    "taglineHighlight": "디지털 자산에는 실행 레이어가 필요합니다.",
+    "desc": "LinkiSwap은 사용자, 유동성 공급자, 솔버를 하나의 통합 네트워크로 연결하는 인프라입니다."
+  },
+  "roadmap": {
+    "label": "로드맵",
+    "h2": "다음은 무엇인가.",
+    "phases": [
+      { "version": "V1", "status": "출시됨", "title": "멀티체인 집계", "desc": "스왑, 전송, 구매 및 판매 — 라이브 제품." },
+      { "version": "V2", "status": "개발 중", "title": "인텐트 기반 실행", "desc": "Open Intents Framework 기반 결과 중심 금융." },
+      { "version": "V3", "status": "설계 중", "title": "솔버 마켓플레이스", "desc": "모든 실행을 위한 오픈 경쟁." },
+      { "version": "V4", "status": "비전", "title": "오픈 실행 네트워크", "desc": "통합되고 프로그래머블한 금융 레이어." }
+    ]
+  },
+  "cta": {
+    "h2Line1": "거래에서 벗어나세요.",
+    "h2Line2": "결과를 달성하기 시작하세요.",
+    "desc": "LinkiSwap에 원하는 것을 말씀해 주세요. 방법은 저희가 찾겠습니다.",
+    "launchApp": "앱 시작",
+    "docs": "문서 읽기 →"
+  },
+  "footer": {
+    "tagline": "인텐트 기반 금융",
+    "links": { "app": "앱", "docs": "문서", "solvers": "솔버", "twitter": "X / Twitter", "github": "GitHub" },
+    "copyright": "© 2026 LinkiSwap"
+  },
+  "intentBar": {
+    "phrases": [
+      "민준에게 $100 전송",
+      "USDC를 ETH로 스왑",
+      "내 계좌로 출금",
+      "$50 기프트카드 구매",
+      "ETH를 Solana로 브릿지"
+    ]
+  },
+  "widget": {
+    "tabs": { "swap": "스왑", "send": "전송", "buy": "구매", "sell": "판매" },
+    "youPay": "지불 금액",
+    "youReceive": "수령 금액",
+    "youSend": "전송 금액",
+    "recipient": "수령인",
+    "recipientPlaceholder": "@민준, ENS, 주소 또는 이메일",
+    "sendNote": "수령인의 선호 체인으로 도착합니다.",
+    "card": "💳 카드",
+    "cashOutTo": "출금 대상",
+    "bank": "🏦 은행 · KRW",
+    "routeNote": "최적 경로 · 솔버가 선정",
+    "solversNote": "●●● 솔버 3개 경쟁 중",
+    "actionBuy": "{{token}} 구매",
+    "actionCashOut": "출금"
+  }
+}

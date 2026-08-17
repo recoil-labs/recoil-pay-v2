@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="canonical" href="https://linkiswap.com/" />
+    <meta name="theme-color" content="#070436" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('linkiswap-theme');
+          if (t !== 'light' && t !== 'dark') {
+            t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+          }
+          document.documentElement.setAttribute('data-theme', t);
+          var m = document.querySelector('meta[name="theme-color"]');
+          if (m) m.setAttribute('content', t === 'light' ? '#f0f4f8' : '#070436');
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+
+    <title>LinkiSwap — Intent-Powered Cross-Chain Swaps, Transfers & Cashout</title>
+    <meta name="description" content="LinkiSwap turns complex blockchain transactions into simple financial outcomes. Buy, sell, swap, send and cash out — without worrying about chains, bridges or gas." />
+    <meta name="keywords" content="crypto swap, cross-chain swap, intent-based swap, DeFi, stablecoin transfer, bridge, gasless swap, solver marketplace, on-chain intents, LinkiSwap" />
+    <meta name="robots" content="index,follow,max-image-preview:large" />
+    <meta name="author" content="LinkiSwap" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="LinkiSwap" />
+    <meta property="og:url" content="https://linkiswap.com/" />
+    <meta property="og:title" content="LinkiSwap — Intent-Powered Cross-Chain Swaps, Transfers & Cashout" />
+    <meta property="og:description" content="Buy, sell, swap, send and cash out across chains — without worrying about bridges or gas. Powered by an open solver marketplace." />
+    <meta property="og:image" content="https://linkiswap.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@linkiswap" />
+    <meta name="twitter:title" content="LinkiSwap — Intent-Powered Cross-Chain Swaps, Transfers & Cashout" />
+    <meta name="twitter:description" content="Buy, sell, swap, send and cash out across chains — without worrying about bridges or gas. Powered by an open solver marketplace." />
+    <meta name="twitter:image" content="https://linkiswap.com/og-image.png" />
+
+    <!-- Structured data -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://linkiswap.com/#organization",
+            "name": "LinkiSwap",
+            "url": "https://linkiswap.com/",
+            "logo": "https://linkiswap.com/logo.svg"
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://linkiswap.com/#website",
+            "url": "https://linkiswap.com/",
+            "name": "LinkiSwap",
+            "publisher": { "@id": "https://linkiswap.com/#organization" },
+            "inLanguage": "en"
+          },
+          {
+            "@type": "SoftwareApplication",
+            "name": "LinkiSwap",
+            "applicationCategory": "FinanceApplication",
+            "operatingSystem": "Web",
+            "url": "https://linkiswap.com/",
+            "description": "Intent-powered cross-chain swaps, transfers and cashout. Buy, sell, swap, send and cash out without managing chains, bridges or gas.",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,1049 @@
+//! Direct settlement implementation for testing purposes.
+//!
+//! This module provides a basic implementation of the SettlementInterface trait
+//! intended for testing and development. It handles fill validation and claim
+//! readiness checks using simple transaction receipt verification without
+//! complex attestation mechanisms.
+
+use crate::{
+	utils::{create_providers_for_chains, parse_oracle_config},
+	OracleConfig, SettlementError, SettlementInterface,
+};
+use alloy_primitives::{hex, FixedBytes, U256};
+use alloy_provider::{DynProvider, Provider};
+use async_trait::async_trait;
+use solver_types::{
+	with_0x_prefix, ConfigSchema, Field, FieldType, FillProof, NetworksConfig, Order, Schema,
+	Transaction, TransactionHash, TransactionReceipt,
+};
+use std::collections::HashMap;
+
+/// Direct settlement implementation.
+///
+/// This implementation validates fills by checking transaction receipts
+/// and manages dispute periods before allowing claims.
+pub struct DirectSettlement {
+	/// RPC providers for each supported network.
+	providers: HashMap<u64, DynProvider>,
+	/// Oracle configuration including addresses and routes
+	oracle_config: OracleConfig,
+	/// Dispute period duration in seconds.
+	dispute_period_seconds: u64,
+}
+
+impl DirectSettlement {
+	/// Creates a new DirectSettlement instance.
+	///
+	/// Configures settlement validation with oracle configuration
+	/// and dispute period.
+	pub async fn new(
+		networks: &NetworksConfig,
+		oracle_config: OracleConfig,
+		dispute_period_seconds: u64,
+	) -> Result<Self, SettlementError> {
+		// Collect unique network IDs from input and output oracles
+		let all_network_ids: Vec<u64> = oracle_config
+			.input_oracles
+			.keys()
+			.chain(oracle_config.output_oracles.keys())
+			.copied()
+			.collect();
+		let providers = create_providers_for_chains(&all_network_ids, networks)?;
+
+		Ok(Self {
+			providers,
+			oracle_config,
+			dispute_period_seconds,
+		})
+	}
+
+	/// Validate that the order-bound input oracle is configured for the given
+	/// source chain. Returns the parsed order-bound input oracle on success.
+	fn validate_bound_input_oracle(
+		&self,
+		order: &Order,
+		source_chain: u64,
+	) -> Result<solver_types::Address, SettlementError> {
+		let input_oracle = crate::parse_bound_input_oracle(order)?;
+		if !self.is_input_oracle_supported(source_chain, &input_oracle) {
+			return Err(SettlementError::ValidationFailed(format!(
+				"Order-bound input oracle is not configured for source chain {source_chain}"
+			)));
+		}
+		Ok(input_oracle)
+	}
+
+	/// Validate that the order-bound output oracle is configured for the given
+	/// destination chain. Returns the parsed order-bound output oracle on success.
+	fn validate_bound_output_oracle(
+		&self,
+		order: &Order,
+		destination_chain: u64,
+	) -> Result<solver_types::Address, SettlementError> {
+		let output_oracle = crate::parse_bound_output_oracle(order, destination_chain)?;
+		if !self.is_output_oracle_supported(destination_chain, &output_oracle) {
+			return Err(SettlementError::ValidationFailed(format!(
+				"Order-bound output oracle is not configured for destination chain {destination_chain}"
+			)));
+		}
+		Ok(output_oracle)
+	}
+}
+
+/// Configuration schema for DirectSettlement.
+pub struct DirectSettlementSchema;
+
+impl DirectSettlementSchema {
+	/// Static validation method for use before instance creation
+	pub fn validate_config(
+		config: &serde_json::Value,
+	) -> Result<(), solver_types::ValidationError> {
+		let instance = Self;
+		instance.validate(config)
+	}
+}
+
+impl ConfigSchema for DirectSettlementSchema {
+	fn validate(&self, config: &serde_json::Value) -> Result<(), solver_types::ValidationError> {
+		let schema = Schema::new(
+			// Required fields
+			vec![
+				Field::new(
+					"dispute_period_seconds",
+					FieldType::Integer {
+						min: Some(0),
+						max: Some(86400),
+					},
+				),
+				Field::new(
+					"oracles",
+					FieldType::Table(Schema::new(
+						vec![
+							Field::new("input", FieldType::Table(Schema::new(vec![], vec![]))),
+							Field::new("output", FieldType::Table(Schema::new(vec![], vec![]))),
+						],
+						vec![],
+					)),
+				),
+				Field::new("routes", FieldType::Table(Schema::new(vec![], vec![]))),
+			],
+			// Optional fields
+			vec![Field::new("oracle_selection_strategy", FieldType::String)],
+		);
+
+		schema.validate(config)
+	}
+}
+
+#[async_trait]
+impl SettlementInterface for DirectSettlement {
+	fn oracle_config(&self) -> &OracleConfig {
+		&self.oracle_config
+	}
+
+	fn config_schema(&self) -> Box<dyn ConfigSchema> {
+		Box::new(DirectSettlementSchema)
+	}
+
+	/// Gets attestation data for a filled order and generates a fill proof.
+	///
+	/// Retrieves transaction receipt and block data from the destination chain
+	/// to construct proof of fill execution.
+	async fn get_attestation(
+		&self,
+		order: &Order,
+		tx_hash: &TransactionHash,
+	) -> Result<FillProof, SettlementError> {
+		// Get the origin chain ID from the order
+		// Note: For now we assume all inputs are on the same chain
+		let origin_chain_id = order
+			.input_chains
+			.first()
+			.map(|c| c.chain_id)
+			.ok_or_else(|| {
+				SettlementError::ValidationFailed("No input chains in order".to_string())
+			})?;
+		// Get the destination chain ID from the order
+		// Note: For now we assume all outputs are on the same chain
+		let destination_chain_id =
+			order
+				.output_chains
+				.first()
+				.map(|c| c.chain_id)
+				.ok_or_else(|| {
+					SettlementError::ValidationFailed("No output chains in order".to_string())
+				})?;
+
+		// Get the appropriate provider for this chain
+		let provider = self.providers.get(&destination_chain_id).ok_or_else(|| {
+			SettlementError::ValidationFailed(format!(
+				"No provider configured for chain {destination_chain_id}"
+			))
+		})?;
+
+		// Security: use the order-bound input oracle from canonical order_data.
+		// Any mismatch with the configured input oracle set for the source chain
+		// is a security event and surfaces as ValidationFailed.
+		let oracle_address = self.validate_bound_input_oracle(order, origin_chain_id)?;
+
+		// Convert tx hash
+		let hash = FixedBytes::<32>::from_slice(&tx_hash.0);
+
+		// Get transaction receipt
+		let receipt = provider
+			.get_transaction_receipt(hash)
+			.await
+			.map_err(|e| SettlementError::ValidationFailed(format!("Failed to get receipt: {e}")))?
+			.ok_or_else(|| {
+				SettlementError::ValidationFailed("Transaction not found".to_string())
+			})?;
+
+		// Check if transaction was successful
+		if !receipt.status() {
+			return Err(SettlementError::ValidationFailed(
+				"Transaction failed".to_string(),
+			));
+		}
+
+		let tx_block = receipt.block_number.unwrap_or(0);
+
+		// Get the block timestamp
+		let block = provider
+			.get_block_by_number(alloy_rpc_types::BlockNumberOrTag::Number(tx_block))
+			.await
+			.map_err(|e| SettlementError::ValidationFailed(format!("Failed to get block: {e}")))?;
+
+		let block_timestamp = block
+			.ok_or_else(|| SettlementError::ValidationFailed("Block not found".to_string()))?
+			.header
+			.timestamp;
+
+		Ok(FillProof {
+			tx_hash: tx_hash.clone(),
+			block_number: tx_block,
+			oracle_address: with_0x_prefix(&hex::encode(&oracle_address.0)),
+			attestation_data: Some(order.id.as_bytes().to_vec()),
+			filled_timestamp: block_timestamp,
+		})
+	}
+
+	/// Checks if an order is ready to be claimed.
+	///
+	/// Verifies that the dispute period has passed and all claim
+	/// requirements are met.
+	async fn can_claim(&self, order: &Order, fill_proof: &FillProof) -> bool {
+		// Get the destination chain ID from the order
+		let destination_chain_id = match order.output_chains.first() {
+			Some(chain) => chain.chain_id,
+			None => return false,
+		};
+
+		// Get the appropriate provider for this chain
+		let provider = match self.providers.get(&destination_chain_id) {
+			Some(p) => p,
+			None => return false,
+		};
+
+		// Get current block to check timestamp
+		let current_block = match provider.get_block_number().await {
+			Ok(block_num) => match provider.get_block_by_number(block_num.into()).await {
+				Ok(Some(block)) => block,
+				Ok(None) => return false,
+				Err(_) => return false,
+			},
+			Err(_) => return false,
+		};
+
+		// Check if dispute period has passed using timestamps
+		let current_timestamp = current_block.header.timestamp;
+		let dispute_end_timestamp = fill_proof.filled_timestamp + self.dispute_period_seconds;
+
+		if current_timestamp < dispute_end_timestamp {
+			return false; // Still in dispute period
+		}
+
+		true
+	}
+
+	/// Generates a PostFill transaction for oracle interaction.
+	///
+	/// Creates a transaction that would interact with the output oracle
+	/// on the destination chain after fill execution.
+	async fn generate_post_fill_transaction(
+		&self,
+		order: &Order,
+		_fill_receipt: &TransactionReceipt,
+	) -> Result<Option<Transaction>, SettlementError> {
+		// Get the output oracle for PostFill (happens on destination chain)
+		let dest_chain = order
+			.output_chains
+			.first()
+			.map(|c| c.chain_id)
+			.ok_or_else(|| SettlementError::ValidationFailed("No output chains in order".into()))?;
+
+		// Preserve "no output oracle configured for this chain = skip post-fill"
+		// semantics for legitimate unconfigured chains.
+		if self.get_output_oracles(dest_chain).is_empty() {
+			return Ok(None);
+		}
+		// At least one output oracle is configured for this chain; require the
+		// order-bound output oracle to be in the supported set. A mismatch is a
+		// security event and surfaces as ValidationFailed (not Ok(None)).
+		let _output_oracle = self.validate_bound_output_oracle(order, dest_chain)?;
+
+		// For testing: send to solver's own address (from the order)
+		// This simulates a PostFill oracle interaction that modifies state
+		// Realistically, this would call a real oracle method
+		let data = Vec::new(); // Empty calldata for simple ETH transfer
+
+		Ok(Some(Transaction {
+			to: Some(order.solver_address.clone()),
+			data,
+			value: U256::ZERO,
+			chain_id: dest_chain,
+			nonce: None,
+			gas_limit: Some(21000),
+			gas_price: None,
+			max_fee_per_gas: None,
+			max_priority_fee_per_gas: None,
+		}))
+	}
+
+	/// Generates a PreClaim transaction for oracle interaction.
+	///
+	/// Creates a transaction that would interact with the input oracle
+	/// on the origin chain before claiming rewards.
+	async fn generate_pre_claim_transaction(
+		&self,
+		order: &Order,
+		_fill_proof: &FillProof,
+	) -> Result<Option<Transaction>, SettlementError> {
+		// Get the input oracle for PreClaim (happens on origin chain)
+		let origin_chain = order
+			.input_chains
+			.first()
+			.map(|c| c.chain_id)
+			.ok_or_else(|| SettlementError::ValidationFailed("No input chains in order".into()))?;
+
+		// Preserve "no input oracle configured for this chain = skip pre-claim"
+		// semantics for legitimate unconfigured chains.
+		if self.get_input_oracles(origin_chain).is_empty() {
+			return Ok(None);
+		}
+		// At least one input oracle is configured for this chain; require the
+		// order-bound input oracle to be in the supported set. A mismatch is a
+		// security event and surfaces as ValidationFailed (not Ok(None)).
+		let _input_oracle = self.validate_bound_input_oracle(order, origin_chain)?;
+
+		// For testing: send to solver's own address (from the order)
+		// This simulates a PreClaim oracle interaction that modifies state
+		// Realistically, this would call a real oracle method like submitProof
+		let data = Vec::new(); // Empty calldata for simple ETH transfer
+
+		Ok(Some(Transaction {
+			to: Some(order.solver_address.clone()),
+			data,
+			value: U256::ZERO,
+			chain_id: origin_chain,
+			nonce: None,
+			gas_limit: Some(21000),
+			gas_price: None,
+			max_fee_per_gas: None,
+			max_priority_fee_per_gas: None,
+		}))
+	}
+}
+
+/// Factory function to create a settlement provider from configuration.
+///
+/// Required configuration parameters:
+/// - `oracles`: Table with input and output oracle configurations
+/// - `routes`: Table mapping oracle routes for different chains
+/// - `dispute_period_seconds`: Dispute period duration (0-86400 seconds)
+///
+/// Optional configuration parameters:
+/// - `oracle_selection_strategy`: Strategy for oracle selection (default: round-robin)
+pub fn create_settlement(
+	config: &serde_json::Value,
+	networks: &NetworksConfig,
+	_storage: std::sync::Arc<solver_storage::StorageService>,
+) -> Result<Box<dyn SettlementInterface>, SettlementError> {
+	// Validate configuration first
+	DirectSettlementSchema::validate_config(config)
+		.map_err(|e| SettlementError::ValidationFailed(format!("Invalid configuration: {e}")))?;
+
+	// Parse oracle configuration using common utilities
+	let oracle_config = parse_oracle_config(config)?;
+
+	let dispute_period_seconds = config
+		.get("dispute_period_seconds")
+		.and_then(|v| v.as_i64())
+		.unwrap_or(300) as u64; // 5 minutes default
+
+	// Create settlement service synchronously
+	let settlement = tokio::task::block_in_place(|| {
+		tokio::runtime::Handle::current().block_on(async {
+			DirectSettlement::new(networks, oracle_config, dispute_period_seconds).await
+		})
+	})?;
+
+	Ok(Box::new(settlement))
+}
+
+/// Registry for the direct settlement implementation.
+pub struct Registry;
+
+impl solver_types::ImplementationRegistry for Registry {
+	const NAME: &'static str = "direct";
+	type Factory = crate::SettlementFactory;
+
+	fn factory() -> Self::Factory {
+		create_settlement
+	}
+}
+
+impl crate::SettlementRegistry for Registry {}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::{OracleSelectionStrategy, SettlementInterface};
+	use solver_types::{
+		parse_address,
+		utils::tests::builders::{NetworkConfigBuilder, NetworksConfigBuilder},
+		ImplementationRegistry,
+	};
+	use std::collections::HashMap;
+	use std::sync::Arc;
+
+	fn create_mock_storage() -> Arc<solver_storage::StorageService> {
+		let storage_backend =
+			Box::new(solver_storage::implementations::memory::MemoryStorage::new());
+		Arc::new(solver_storage::StorageService::new(storage_backend))
+	}
+
+	fn create_test_networks() -> NetworksConfig {
+		NetworksConfigBuilder::new()
+			.add_network(1, NetworkConfigBuilder::new().build())
+			.add_network(2, NetworkConfigBuilder::new().build())
+			.build()
+	}
+
+	// Fix the create_test_oracle_config function
+	fn create_test_oracle_config() -> OracleConfig {
+		let mut input_oracles = HashMap::new();
+		input_oracles.insert(
+			1,
+			vec![parse_address("0x1111111111111111111111111111111111111111").unwrap()],
+		);
+
+		let mut output_oracles = HashMap::new();
+		output_oracles.insert(
+			2,
+			vec![parse_address("0x2222222222222222222222222222222222222222").unwrap()],
+		);
+
+		// Fix: routes should map u64 -> Vec<u64>, not (u64, u64) -> Address
+		let mut routes = HashMap::new();
+		routes.insert(1, vec![2]); // Network 1 can route to network 2
+
+		OracleConfig {
+			input_oracles,
+			output_oracles,
+			routes,
+			selection_strategy: OracleSelectionStrategy::RoundRobin,
+		}
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_direct_settlement_new_success() {
+		let networks = create_test_networks();
+		let oracle_config = create_test_oracle_config();
+
+		let result = DirectSettlement::new(&networks, oracle_config, 300).await;
+		assert!(result.is_ok());
+
+		let settlement = result.unwrap();
+		assert_eq!(settlement.dispute_period_seconds, 300);
+		assert!(settlement.providers.contains_key(&1));
+		assert!(settlement.providers.contains_key(&2));
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_direct_settlement_new_missing_network() {
+		let mut networks = create_test_networks();
+		networks.remove(&1); // Remove network 1
+		let oracle_config = create_test_oracle_config();
+
+		let result = DirectSettlement::new(&networks, oracle_config, 300).await;
+		assert!(matches!(result, Err(SettlementError::ValidationFailed(_))));
+		if let Err(SettlementError::ValidationFailed(msg)) = result {
+			assert!(msg.contains("Network 1 not found"));
+		}
+	}
+
+	#[test]
+	fn test_config_schema_validation_valid() {
+		let schema = DirectSettlementSchema;
+		let config = serde_json::Value::Object({
+			let mut table = serde_json::Map::new();
+			table.insert(
+				"dispute_period_seconds".to_string(),
+				serde_json::Value::from(300),
+			);
+			table.insert(
+				"oracles".to_string(),
+				serde_json::Value::Object({
+					let mut oracles = serde_json::Map::new();
+					oracles.insert(
+						"input".to_string(),
+						serde_json::Value::Object(serde_json::Map::new()),
+					);
+					oracles.insert(
+						"output".to_string(),
+						serde_json::Value::Object(serde_json::Map::new()),
+					);
+					oracles
+				}),
+			);
+			table.insert(
+				"routes".to_string(),
+				serde_json::Value::Object(serde_json::Map::new()),
+			);
+			table
+		});
+
+		let result = schema.validate(&config);
+		assert!(result.is_ok());
+	}
+
+	#[test]
+	fn test_config_schema_validation_missing_required_field() {
+		let schema = DirectSettlementSchema;
+		let config = serde_json::Value::Object({
+			let mut table = serde_json::Map::new();
+			// Missing dispute_period_seconds
+			table.insert(
+				"oracles".to_string(),
+				serde_json::Value::Object({
+					let mut oracles = serde_json::Map::new();
+					oracles.insert(
+						"input".to_string(),
+						serde_json::Value::Object(serde_json::Map::new()),
+					);
+					oracles.insert(
+						"output".to_string(),
+						serde_json::Value::Object(serde_json::Map::new()),
+					);
+					oracles
+				}),
+			);
+			table.insert(
+				"routes".to_string(),
+				serde_json::Value::Object(serde_json::Map::new()),
+			);
+			table
+		});
+
+		let result = schema.validate(&config);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_config_schema_validation_invalid_dispute_period() {
+		let schema = DirectSettlementSchema;
+		let config = serde_json::Value::Object({
+			let mut table = serde_json::Map::new();
+			table.insert(
+				"dispute_period_seconds".to_string(),
+				serde_json::Value::from(100000), // Too large
+			);
+			table.insert(
+				"oracles".to_string(),
+				serde_json::Value::Object({
+					let mut oracles = serde_json::Map::new();
+					oracles.insert(
+						"input".to_string(),
+						serde_json::Value::Object(serde_json::Map::new()),
+					);
+					oracles.insert(
+						"output".to_string(),
+						serde_json::Value::Object(serde_json::Map::new()),
+					);
+					oracles
+				}),
+			);
+			table.insert(
+				"routes".to_string(),
+				serde_json::Value::Object(serde_json::Map::new()),
+			);
+			table
+		});
+
+		let result = schema.validate(&config);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_static_config_validation() {
+		let config = serde_json::Value::Object({
+			let mut table = serde_json::Map::new();
+			table.insert(
+				"dispute_period_seconds".to_string(),
+				serde_json::Value::from(300),
+			);
+			table.insert(
+				"oracles".to_string(),
+				serde_json::Value::Object({
+					let mut oracles = serde_json::Map::new();
+					oracles.insert(
+						"input".to_string(),
+						serde_json::Value::Object(serde_json::Map::new()),
+					);
+					oracles.insert(
+						"output".to_string(),
+						serde_json::Value::Object(serde_json::Map::new()),
+					);
+					oracles
+				}),
+			);
+			table.insert(
+				"routes".to_string(),
+				serde_json::Value::Object(serde_json::Map::new()),
+			);
+			table
+		});
+
+		let result = DirectSettlementSchema::validate_config(&config);
+		assert!(result.is_ok());
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_create_settlement_success() {
+		let config = serde_json::Value::Object({
+			let mut table = serde_json::Map::new();
+			table.insert(
+				"dispute_period_seconds".to_string(),
+				serde_json::Value::from(300),
+			);
+			table.insert(
+				"oracles".to_string(),
+				serde_json::Value::Object({
+					let mut oracles = serde_json::Map::new();
+					oracles.insert(
+						"input".to_string(),
+						serde_json::Value::Object({
+							let mut input = serde_json::Map::new();
+							input.insert(
+								"1".to_string(),
+								serde_json::Value::Array(vec![serde_json::Value::String(
+									"0x1111111111111111111111111111111111111111".to_string(),
+								)]),
+							);
+							input
+						}),
+					);
+					oracles.insert(
+						"output".to_string(),
+						serde_json::Value::Object({
+							let mut output = serde_json::Map::new();
+							output.insert(
+								"2".to_string(),
+								serde_json::Value::Array(vec![serde_json::Value::String(
+									"0x2222222222222222222222222222222222222222".to_string(),
+								)]),
+							);
+							output
+						}),
+					);
+					oracles
+				}),
+			);
+			table.insert(
+				"routes".to_string(),
+				serde_json::Value::Object({
+					let mut routes = serde_json::Map::new();
+					// Fix: Use correct routes format - chain_id -> [destination_chain_ids]
+					routes.insert(
+						"1".to_string(),
+						serde_json::Value::Array(vec![serde_json::Value::from(2)]),
+					);
+					routes
+				}),
+			);
+			table
+		});
+
+		let networks = create_test_networks();
+		let storage = create_mock_storage();
+		let result = create_settlement(&config, &networks, storage);
+		assert!(result.is_ok());
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_create_settlement_invalid_config() {
+		let config = serde_json::Value::Object({
+			let mut table = serde_json::Map::new();
+			// Missing required fields
+			table.insert(
+				"dispute_period_seconds".to_string(),
+				serde_json::Value::from(300),
+			);
+			table
+		});
+
+		let networks = create_test_networks();
+		let storage = create_mock_storage();
+		let result = create_settlement(&config, &networks, storage);
+		assert!(matches!(result, Err(SettlementError::ValidationFailed(_))));
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_settlement_interface_oracle_config() {
+		let networks = create_test_networks();
+		let oracle_config = create_test_oracle_config();
+
+		let settlement = DirectSettlement::new(&networks, oracle_config.clone(), 300)
+			.await
+			.unwrap();
+
+		let returned_config = settlement.oracle_config();
+		assert_eq!(
+			returned_config.input_oracles.len(),
+			oracle_config.input_oracles.len()
+		);
+		assert_eq!(
+			returned_config.output_oracles.len(),
+			oracle_config.output_oracles.len()
+		);
+		assert_eq!(returned_config.routes.len(), oracle_config.routes.len());
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_settlement_interface_config_schema() {
+		let networks = create_test_networks();
+		let oracle_config = create_test_oracle_config();
+
+		let settlement = DirectSettlement::new(&networks, oracle_config, 300)
+			.await
+			.unwrap();
+
+		let schema = settlement.config_schema();
+
+		// Test valid config
+		let valid_config = serde_json::Value::Object({
+			let mut table = serde_json::Map::new();
+			table.insert(
+				"dispute_period_seconds".to_string(),
+				serde_json::Value::from(300),
+			);
+			table.insert(
+				"oracles".to_string(),
+				serde_json::Value::Object({
+					let mut oracles = serde_json::Map::new();
+					oracles.insert(
+						"input".to_string(),
+						serde_json::Value::Object(serde_json::Map::new()),
+					);
+					oracles.insert(
+						"output".to_string(),
+						serde_json::Value::Object(serde_json::Map::new()),
+					);
+					oracles
+				}),
+			);
+			table.insert(
+				"routes".to_string(),
+				serde_json::Value::Object(serde_json::Map::new()),
+			);
+			table
+		});
+		assert!(schema.validate(&valid_config).is_ok());
+	}
+
+	#[test]
+	fn test_registry_name() {
+		assert_eq!(
+			<Registry as solver_types::ImplementationRegistry>::NAME,
+			"direct"
+		);
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_registry_factory() {
+		let factory = Registry::factory();
+
+		// Test that factory function exists and has correct type
+		let config = serde_json::Value::Object({
+			let mut table = serde_json::Map::new();
+			table.insert(
+				"dispute_period_seconds".to_string(),
+				serde_json::Value::from(300),
+			);
+			table.insert(
+				"oracles".to_string(),
+				serde_json::Value::Object({
+					let mut oracles = serde_json::Map::new();
+					oracles.insert(
+						"input".to_string(),
+						serde_json::Value::Object({
+							let mut input = serde_json::Map::new();
+							input.insert(
+								"1".to_string(),
+								serde_json::Value::Array(vec![serde_json::Value::String(
+									"0x1111111111111111111111111111111111111111".to_string(),
+								)]),
+							);
+							input
+						}),
+					);
+					oracles.insert(
+						"output".to_string(),
+						serde_json::Value::Object({
+							let mut output = serde_json::Map::new();
+							output.insert(
+								"2".to_string(),
+								serde_json::Value::Array(vec![serde_json::Value::String(
+									"0x2222222222222222222222222222222222222222".to_string(),
+								)]),
+							);
+							output
+						}),
+					);
+					oracles
+				}),
+			);
+			table.insert(
+				"routes".to_string(),
+				serde_json::Value::Object({
+					let mut routes = serde_json::Map::new();
+					// Fix: routes expects chain_id -> [destination_chain_ids]
+					routes.insert(
+						"1".to_string(),
+						serde_json::Value::Array(vec![serde_json::Value::from(2)]),
+					);
+					routes
+				}),
+			);
+			table
+		});
+
+		let networks = create_test_networks();
+		let storage = create_mock_storage();
+		let result = factory(&config, &networks, storage);
+		assert!(result.is_ok());
+	}
+
+	// Integration-style tests for error cases
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_direct_settlement_no_http_url() {
+		let mut networks = create_test_networks();
+		// Remove HTTP URL from network 1
+		networks.get_mut(&1).unwrap().rpc_urls.clear();
+		let oracle_config = create_test_oracle_config();
+
+		let result = DirectSettlement::new(&networks, oracle_config, 300).await;
+		assert!(matches!(result, Err(SettlementError::ValidationFailed(_))));
+		if let Err(SettlementError::ValidationFailed(msg)) = result {
+			assert!(msg.contains("No HTTP RPC URL configured"));
+		}
+	}
+
+	// ── helpers for order-bound oracle binding tests ────────────────────────
+
+	fn make_eip7683_order_data_for_binding(
+		input_oracle: &solver_types::Address,
+		outputs: Vec<solver_types::standards::eip7683::MandateOutput>,
+	) -> serde_json::Value {
+		use solver_types::utils::tests::builders::Eip7683OrderDataBuilder;
+		let data = Eip7683OrderDataBuilder::new()
+			.origin_chain_id(U256::from(1u64))
+			.input_oracle(solver_types::with_0x_prefix(&hex::encode(&input_oracle.0)))
+			.outputs(outputs)
+			.build();
+		serde_json::to_value(data).unwrap()
+	}
+
+	fn make_output_for_binding(
+		destination_chain: u64,
+		output_oracle: [u8; 32],
+	) -> solver_types::standards::eip7683::MandateOutput {
+		use solver_types::utils::tests::builders::MandateOutputBuilder;
+		MandateOutputBuilder::new()
+			.oracle(output_oracle)
+			.chain_id(U256::from(destination_chain))
+			.token([0x11; 32])
+			.amount(U256::from(42u64))
+			.recipient([0x22; 32])
+			.build()
+	}
+
+	fn test_direct_settlement(oracle_config: OracleConfig) -> DirectSettlement {
+		DirectSettlement {
+			providers: HashMap::new(),
+			oracle_config,
+			dispute_period_seconds: 300,
+		}
+	}
+
+	#[test]
+	fn test_validate_bound_input_oracle_success() {
+		use solver_types::utils::tests::builders::OrderBuilder;
+
+		let input_oracle = solver_types::Address(vec![0x33; 20]);
+		let order = OrderBuilder::new()
+			.with_data(make_eip7683_order_data_for_binding(
+				&input_oracle,
+				vec![make_output_for_binding(137, [0u8; 32])],
+			))
+			.build();
+		let oracle_config = OracleConfig {
+			input_oracles: HashMap::from([(1u64, vec![input_oracle.clone()])]),
+			output_oracles: HashMap::new(),
+			routes: HashMap::new(),
+			selection_strategy: OracleSelectionStrategy::First,
+		};
+		let settlement = test_direct_settlement(oracle_config);
+
+		assert_eq!(
+			settlement.validate_bound_input_oracle(&order, 1).unwrap(),
+			input_oracle
+		);
+	}
+
+	#[test]
+	fn test_validate_bound_input_oracle_rejects_unsupported() {
+		use solver_types::utils::tests::builders::OrderBuilder;
+
+		let signed_oracle = solver_types::Address(vec![0x33; 20]);
+		let configured_oracle = solver_types::Address(vec![0x44; 20]);
+		let order = OrderBuilder::new()
+			.with_data(make_eip7683_order_data_for_binding(
+				&signed_oracle,
+				vec![make_output_for_binding(137, [0u8; 32])],
+			))
+			.build();
+		let oracle_config = OracleConfig {
+			input_oracles: HashMap::from([(1u64, vec![configured_oracle])]),
+			output_oracles: HashMap::new(),
+			routes: HashMap::new(),
+			selection_strategy: OracleSelectionStrategy::First,
+		};
+		let settlement = test_direct_settlement(oracle_config);
+
+		let err = settlement
+			.validate_bound_input_oracle(&order, 1)
+			.unwrap_err();
+		assert!(
+			err.to_string()
+				.contains("not configured for source chain 1"),
+			"unexpected error: {err}"
+		);
+	}
+
+	#[test]
+	fn test_validate_bound_output_oracle_success() {
+		use crate::utils::address_to_bytes32;
+		use solver_types::utils::tests::builders::OrderBuilder;
+
+		let input_oracle = solver_types::Address(vec![0x33; 20]);
+		let output_oracle = solver_types::Address(vec![0x44; 20]);
+		let order = OrderBuilder::new()
+			.with_data(make_eip7683_order_data_for_binding(
+				&input_oracle,
+				vec![make_output_for_binding(
+					137,
+					address_to_bytes32(&output_oracle),
+				)],
+			))
+			.build();
+		let oracle_config = OracleConfig {
+			input_oracles: HashMap::new(),
+			output_oracles: HashMap::from([(137u64, vec![output_oracle.clone()])]),
+			routes: HashMap::new(),
+			selection_strategy: OracleSelectionStrategy::First,
+		};
+		let settlement = test_direct_settlement(oracle_config);
+
+		assert_eq!(
+			settlement
+				.validate_bound_output_oracle(&order, 137)
+				.unwrap(),
+			output_oracle
+		);
+	}
+
+	#[test]
+	fn test_validate_bound_output_oracle_rejects_unsupported() {
+		use crate::utils::address_to_bytes32;
+		use solver_types::utils::tests::builders::OrderBuilder;
+
+		let input_oracle = solver_types::Address(vec![0x33; 20]);
+		let signed_output_oracle = solver_types::Address(vec![0x44; 20]);
+		let configured_output_oracle = solver_types::Address(vec![0x55; 20]);
+		let order = OrderBuilder::new()
+			.with_data(make_eip7683_order_data_for_binding(
+				&input_oracle,
+				vec![make_output_for_binding(
+					137,
+					address_to_bytes32(&signed_output_oracle),
+				)],
+			))
+			.build();
+		let oracle_config = OracleConfig {
+			input_oracles: HashMap::new(),
+			output_oracles: HashMap::from([(137u64, vec![configured_output_oracle])]),
+			routes: HashMap::new(),
+			selection_strategy: OracleSelectionStrategy::First,
+		};
+		let settlement = test_direct_settlement(oracle_config);
+
+		let err = settlement
+			.validate_bound_output_oracle(&order, 137)
+			.unwrap_err();
+		assert!(
+			err.to_string()
+				.contains("not configured for destination chain 137"),
+			"unexpected error: {err}"
+		);
+	}
+
+	#[test]
+	fn test_config_with_optional_fields() {
+		let schema = DirectSettlementSchema;
+		let config = serde_json::Value::Object({
+			let mut table = serde_json::Map::new();
+			table.insert(
+				"dispute_period_seconds".to_string(),
+				serde_json::Value::from(300),
+			);
+			table.insert(
+				"oracles".to_string(),
+				serde_json::Value::Object({
+					let mut oracles = serde_json::Map::new();
+					oracles.insert(
+						"input".to_string(),
+						serde_json::Value::Object(serde_json::Map::new()),
+					);
+					oracles.insert(
+						"output".to_string(),
+						serde_json::Value::Object(serde_json::Map::new()),
+					);
+					oracles
+				}),
+			);
+			table.insert(
+				"routes".to_string(),
+				serde_json::Value::Object(serde_json::Map::new()),
+			);
+			table.insert(
+				"oracle_selection_strategy".to_string(),
+				serde_json::Value::String("round_robin".to_string()),
+			);
+			table
+		});
+
+		let result = schema.validate(&config);
+		assert!(result.is_ok());
+	}
+}

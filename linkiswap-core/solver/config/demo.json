@@ -1,0 +1,228 @@
+{
+  "account": {
+    "implementations": {
+      "local": {
+        "private_key": "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+      }
+    },
+    "primary": "local"
+  },
+  "api": {
+    "auth": {
+      "access_token_expiry_hours": 1,
+      "issuer": "oif-solver-demo",
+      "jwt_secret": "${JWT_SECRET:-REPLACE_ME_WITH_AT_LEAST_32_BYTES_OF_ENTROPY}",
+      "orders_auth_enabled": true,
+      "refresh_token_expiry_hours": 720
+    },
+    "enabled": true,
+    "host": "127.0.0.1",
+    "implementations": {
+      "discovery": "offchain_eip7683"
+    },
+    "max_request_size": 1048576,
+    "port": 3000,
+    "quote": {
+      "validity_seconds": 60
+    },
+    "timeout_seconds": 30
+  },
+  "delivery": {
+    "implementations": {
+      "evm_alloy": {
+        "fee_policy": {
+          "chains": {
+            "31337": {
+              "min_priority_fee_per_gas": "10000000",
+              "priority_fee_fallback": "10000000",
+              "quote_cost_strategy": "buffered_effective_125"
+            },
+            "31338": {
+              "min_priority_fee_per_gas": "10000000",
+              "priority_fee_fallback": "10000000",
+              "quote_cost_strategy": "buffered_effective_125"
+            }
+          },
+          "default_speed": "fast"
+        },
+        "network_ids": [
+          31337,
+          31338
+        ]
+      }
+    },
+    "min_confirmations": 1
+  },
+  "discovery": {
+    "implementations": {
+      "offchain_eip7683": {
+        "network_ids": [
+          31337
+        ]
+      },
+      "onchain_eip7683": {
+        "network_ids": [
+          31337,
+          31338
+        ],
+        "polling_interval_secs": 0
+      }
+    }
+  },
+  "gas": {
+    "flows": {
+      "eip3009_escrow": {
+        "claim": 60084,
+        "fill": 77298,
+        "open": 130254
+      },
+      "permit2_escrow": {
+        "claim": 60084,
+        "fill": 77298,
+        "open": 146306
+      },
+      "resource_lock": {
+        "claim": 122793,
+        "fill": 77298,
+        "open": 0
+      }
+    }
+  },
+  "networks": {
+    "31337": {
+      "allocator_address": "0x0165878A594ca255338adfa4d48449f69242Eb8F",
+      "input_settler_address": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+      "input_settler_compact_address": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+      "output_settler_address": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+      "rpc_urls": [
+        {
+          "http": "http://localhost:8545",
+          "ws": "ws://localhost:8545"
+        }
+      ],
+      "the_compact_address": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+      "tokens": [
+        {
+          "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "decimals": 18,
+          "symbol": "TOKA"
+        },
+        {
+          "address": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+          "decimals": 18,
+          "symbol": "TOKB"
+        }
+      ]
+    },
+    "31338": {
+      "allocator_address": "0x0165878A594ca255338adfa4d48449f69242Eb8F",
+      "input_settler_address": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+      "input_settler_compact_address": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+      "output_settler_address": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+      "rpc_urls": [
+        {
+          "http": "http://localhost:8546",
+          "ws": "ws://localhost:8546"
+        }
+      ],
+      "the_compact_address": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+      "tokens": [
+        {
+          "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "decimals": 18,
+          "symbol": "TOKA"
+        },
+        {
+          "address": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+          "decimals": 18,
+          "symbol": "TOKB"
+        }
+      ]
+    }
+  },
+  "order": {
+    "implementations": {
+      "eip7683": {}
+    },
+    "strategy": {
+      "implementations": {
+        "simple": {
+          "max_gas_price_gwei": 100
+        }
+      },
+      "primary": "simple"
+    }
+  },
+  "pricing": {
+    "implementations": {
+      "coingecko": {
+        "cache_duration_seconds": 60,
+        "custom_prices": {
+          "TOKA": "200.00",
+          "TOKB": "195.00"
+        },
+        "rate_limit_delay_ms": 1200
+      },
+      "mock": {}
+    },
+    "primary": "mock"
+  },
+  "settlement": {
+    "implementations": {
+      "direct": {
+        "dispute_period_seconds": 1,
+        "network_ids": [
+          31337,
+          31338
+        ],
+        "oracle_selection_strategy": "First",
+        "oracles": {
+          "input": {
+            "31337": [
+              "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853"
+            ],
+            "31338": [
+              "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853"
+            ]
+          },
+          "output": {
+            "31337": [
+              "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6"
+            ],
+            "31338": [
+              "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6"
+            ]
+          }
+        },
+        "order": "eip7683",
+        "routes": {
+          "31337": [
+            31338
+          ],
+          "31338": [
+            31337
+          ]
+        }
+      }
+    },
+    "settlement_poll_interval_seconds": 3
+  },
+  "solver": {
+    "id": "oif-solver-demo",
+    "min_profitability_pct": "1.0",
+    "monitoring_timeout_seconds": 28800
+  },
+  "storage": {
+    "cleanup_interval_seconds": 60,
+    "implementations": {
+      "file": {
+        "storage_path": "./data/storage",
+        "ttl_intents": 120,
+        "ttl_order_by_tx_hash": 300,
+        "ttl_orders": 300
+      },
+      "memory": {}
+    },
+    "primary": "file"
+  }
+}

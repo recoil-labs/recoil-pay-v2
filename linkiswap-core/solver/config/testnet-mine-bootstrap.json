@@ -1,0 +1,79 @@
+{
+  "solver_id": "oif-solver-testnet-mine",
+  "solver_name": "Testnet Solver (own contracts)",
+  "networks": [
+    {
+      "chain_id": 11155420,
+      "name": "optimism-sepolia",
+      "type": "parent",
+      "tokens": [
+        { "symbol": "USDC", "name": "USD Coin", "address": "0x191688B2Ff5Be8F0A5BCAB3E819C900a810FAaf6", "decimals": 6 },
+        { "symbol": "USDT", "name": "Tether USD", "address": "0x8D13AE83C2D23518299bBbA47975731b88c844D8", "decimals": 6 }
+      ],
+      "rpc_urls": ["https://optimism-sepolia-rpc.publicnode.com", "https://sepolia.optimism.io"],
+      "input_settler_address": "0x9EF00F018b4afDCAa89093EF3015E6D918a58003",
+      "output_settler_address": "0xBE85Bb9ADb91D42fa148dE3a929BE1b9C46270A5"
+    },
+    {
+      "chain_id": 84532,
+      "name": "base-sepolia",
+      "type": "hub",
+      "tokens": [
+        { "symbol": "USDC", "name": "USD Coin", "address": "0x73c83DAcc74bB8a704717AC09703b959E74b9705", "decimals": 6 }
+      ],
+      "rpc_urls": ["https://base-sepolia-rpc.publicnode.com", "https://sepolia.base.org"],
+      "input_settler_address": "0xBE85Bb9ADb91D42fa148dE3a929BE1b9C46270A5",
+      "output_settler_address": "0x9EF00F018b4afDCAa89093EF3015E6D918a58003"
+    },
+    {
+      "chain_id": 80002,
+      "name": "polygon-amoy",
+      "type": "new",
+      "tokens": [
+        { "symbol": "USDC", "name": "USD Coin", "address": "0x8c1963bA445dd562Da0B6c6fbCa070921B3fa8E6", "decimals": 6 }
+      ],
+      "rpc_urls": ["https://polygon-amoy-bor-rpc.publicnode.com", "https://rpc-amoy.polygon.technology"],
+      "input_settler_address": "0x1CC9260E285C2C8AC8D2E7102F3978056Ec1d0a8",
+      "output_settler_address": "0x52602D7cc3D833F5d28ee6D01C7F82C9b2322e10"
+    },
+    {
+      "chain_id": 11155111,
+      "name": "ethereum-sepolia",
+      "type": "new",
+      "tokens": [
+        { "symbol": "USDC", "name": "USD Coin", "address": "0x8c1963bA445dd562Da0B6c6fbCa070921B3fa8E6", "decimals": 6 }
+      ],
+      "rpc_urls": ["https://ethereum-sepolia-rpc.publicnode.com", "https://1rpc.io/sepolia"],
+      "input_settler_address": "0x1CC9260E285C2C8AC8D2E7102F3978056Ec1d0a8",
+      "output_settler_address": "0x52602D7cc3D833F5d28ee6D01C7F82C9b2322e10"
+    }
+  ],
+  "settlement": {
+    "type": "direct",
+    "priority": ["direct"],
+    "direct": {
+      "oracles": {
+        "input": {
+          "11155420": ["0x309eAdeDfB7b7Da32b8714a9AA950c8B02924a8e"],
+          "84532": ["0x309eAdeDfB7b7Da32b8714a9AA950c8B02924a8e"],
+          "80002": ["0x306766B063383DF67035465BA883c46bBCf6254c"],
+          "11155111": ["0x306766B063383DF67035465BA883c46bBCf6254c"]
+        },
+        "output": {
+          "11155420": ["0x309eAdeDfB7b7Da32b8714a9AA950c8B02924a8e"],
+          "84532": ["0x309eAdeDfB7b7Da32b8714a9AA950c8B02924a8e"],
+          "80002": ["0x306766B063383DF67035465BA883c46bBCf6254c"],
+          "11155111": ["0x306766B063383DF67035465BA883c46bBCf6254c"]
+        }
+      },
+      "routes": {
+        "11155420": [84532, 80002, 11155111],
+        "84532": [11155420, 80002, 11155111],
+        "80002": [11155420, 84532, 11155111],
+        "11155111": [11155420, 84532, 80002]
+      },
+      "dispute_period_seconds": 1
+    }
+  },
+  "orders_auth_enabled": false
+}

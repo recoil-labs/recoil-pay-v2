@@ -1,0 +1,1331 @@
+//! Operator configuration types for runtime configuration storage.
+//!
+//! `OperatorConfig` is the complete solver configuration stored in Redis.
+//! It represents the merged result of Seeds (hardcoded Rust defaults) and
+//! Initializer (JSON file) on first boot.
+//!
+//! # Architecture
+//!
+//! - **First boot**: Seeds + Initializer → merge → OperatorConfig (stored in Redis)
+//! - **After first boot**: OperatorConfig loaded directly from Redis
+//! - **Runtime**: Admin API can modify any field in OperatorConfig
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use solver_types::OperatorConfig;
+//!
+//! // Load from Redis
+//! let config: OperatorConfig = config_store.get().await?.data;
+//!
+//! // Modify tokens
+//! config.networks.get_mut(&84532).unwrap().tokens.push(token);
+//!
+//! // Save back to Redis
+//! config_store.update(config, version).await?;
+//! ```
+
+use crate::{
+	auth::{normalize_admin_whitelist, upsert_admin_role, AdminRole, AdminWhitelistEntry},
+	networks::NetworkType,
+};
+use alloy_primitives::{Address, B256};
+use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
+
+/// Complete operator configuration stored in Redis.
+///
+/// This is the source of truth for all solver configuration after first boot.
+/// Every field is modifiable via the Admin API.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperatorConfig {
+	/// Unique solver instance identifier.
+	pub solver_id: String,
+
+	/// Optional human-readable solver name.
+	#[serde(default)]
+	pub solver_name: Option<String>,
+
+	/// Per-network configuration, keyed by chain ID.
+	pub networks: HashMap<u64, OperatorNetworkConfig>,
+
+	/// Settlement configuration including Hyperlane settings.
+	pub settlement: OperatorSettlementConfig,
+
+	/// Gas estimation settings per flow type.
+	pub gas: OperatorGasConfig,
+
+	/// Pricing provider configuration.
+	pub pricing: OperatorPricingConfig,
+
+	/// Solver behavior settings.
+	pub solver: OperatorSolverConfig,
+
+	/// Admin authentication settings.
+	pub admin: OperatorAdminConfig,
+
+	/// Whether JWT auth is required for the public Orders API.
+	///
+	/// When true, `POST /orders` and `GET /orders/{id}` require a valid JWT.
+	/// Independent of `admin.enabled` — admin SIWE login is gated solely by
+	/// the admin block, so SIWE works regardless of this flag.
+	#[serde(default)]
+	pub orders_auth_enabled: bool,
+
+	/// Account signing backend configuration.
+	/// If None, defaults to local wallet with SOLVER_PRIVATE_KEY.
+	#[serde(default)]
+	pub account: Option<OperatorAccountConfig>,
+
+	/// Cross-chain rebalancing configuration.
+	/// If None, rebalancing is disabled.
+	#[serde(default)]
+	pub rebalance: Option<OperatorRebalanceConfig>,
+
+	/// Optional per-chain fee-policy override. None = use auto-generated
+	/// defaults. Whatever fields/chains you specify here are merged on top of
+	/// the auto-generated delivery config.
+	#[serde(default)]
+	pub fee_policy: Option<crate::seed_overrides::FeePolicyOverride>,
+
+	/// Transaction-bump policy. Default-disabled; per-chain entries opt
+	/// chains into the same-nonce gas-bumping sweep loop.
+	#[serde(default)]
+	pub tx_bump: OperatorTxBumpConfig,
+}
+
+/// Account configuration for signing backends.
+///
+/// Specifies which account implementation to use (e.g., "local", "kms")
+/// and any non-sensitive configuration parameters.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperatorAccountConfig {
+	/// Primary account implementation to use (e.g., "local", "kms").
+	pub primary: String,
+
+	/// Implementation-specific configurations.
+	/// Keys are implementation names, values are their configuration.
+	/// Note: Sensitive values like private keys should come from environment variables.
+	pub implementations: HashMap<String, serde_json::Value>,
+}
+
+/// Per-network configuration including contracts, tokens, and RPCs.
+///
+/// Contains everything needed to interact with a specific chain.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperatorNetworkConfig {
+	/// Chain ID (e.g., 10 for Optimism, 8453 for Base).
+	pub chain_id: u64,
+
+	/// Human-readable network name.
+	#[serde(default = "default_network_name")]
+	pub name: String,
+
+	/// Network role classification.
+	#[serde(default, rename = "type")]
+	pub network_type: NetworkType,
+
+	/// Tokens supported on this network.
+	pub tokens: Vec<OperatorToken>,
+
+	/// RPC endpoints for this network.
+	pub rpc_urls: Vec<OperatorRpcEndpoint>,
+
+	/// Input settler contract address (permit2/EIP-3009 escrow).
+	pub input_settler_address: Address,
+
+	/// Output settler contract address.
+	pub output_settler_address: Address,
+
+	/// Input settler address for compact/resource-lock flow.
+	pub input_settler_compact_address: Option<Address>,
+
+	/// The Compact contract address.
+	pub the_compact_address: Option<Address>,
+
+	/// Allocator contract address for compact flow.
+	pub allocator_address: Option<Address>,
+}
+
+fn default_network_name() -> String {
+	"unknown".to_string()
+}
+
+/// Token configuration for a network.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OperatorToken {
+	/// Token symbol (e.g., "USDC", "WETH").
+	pub symbol: String,
+
+	/// Optional human-readable token name (e.g., "USD Coin").
+	#[serde(default)]
+	pub name: Option<String>,
+
+	/// Token contract address.
+	pub address: Address,
+
+	/// Number of decimals (e.g., 6 for USDC, 18 for ETH).
+	pub decimals: u8,
+}
+
+/// RPC endpoint configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperatorRpcEndpoint {
+	/// HTTP RPC URL.
+	pub http: String,
+
+	/// Optional WebSocket URL for subscriptions.
+	pub ws: Option<String>,
+}
+
+impl OperatorRpcEndpoint {
+	/// Create an HTTP-only endpoint.
+	pub fn http_only(url: String) -> Self {
+		Self {
+			http: url,
+			ws: None,
+		}
+	}
+
+	/// Create an endpoint with both HTTP and WebSocket URLs.
+	pub fn with_ws(http: String, ws: String) -> Self {
+		Self { http, ws: Some(ws) }
+	}
+}
+
+/// Settlement configuration including Hyperlane settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperatorSettlementConfig {
+	/// Interval in seconds for polling settlement status.
+	pub settlement_poll_interval_seconds: u64,
+
+	/// Selected settlement implementation type.
+	#[serde(default = "default_settlement_type")]
+	pub settlement_type: OperatorSettlementType,
+
+	/// Optional ordered settlement preference for runtime selection.
+	/// When omitted, runtime falls back to `[settlement_type]`.
+	#[serde(default)]
+	pub priority: Option<Vec<OperatorSettlementType>>,
+
+	/// Hyperlane-specific settlement configuration.
+	#[serde(default)]
+	pub hyperlane: Option<OperatorHyperlaneConfig>,
+
+	/// Direct settlement configuration.
+	#[serde(default)]
+	pub direct: Option<OperatorDirectConfig>,
+
+	/// Broadcaster settlement configuration.
+	#[serde(default)]
+	pub broadcaster: Option<OperatorBroadcasterConfig>,
+}
+
+/// Selected settlement implementation type.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OperatorSettlementType {
+	#[default]
+	Hyperlane,
+	Direct,
+	Broadcaster,
+}
+
+fn default_settlement_type() -> OperatorSettlementType {
+	OperatorSettlementType::Hyperlane
+}
+
+/// Hyperlane cross-chain messaging configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperatorHyperlaneConfig {
+	/// Default gas limit for Hyperlane messages.
+	pub default_gas_limit: u64,
+
+	/// Timeout in seconds for Hyperlane messages.
+	pub message_timeout_seconds: u64,
+
+	/// Whether finalization is required before claiming.
+	pub finalization_required: bool,
+
+	/// Mailbox contract address per chain.
+	pub mailboxes: HashMap<u64, Address>,
+
+	/// IGP (Interchain Gas Paymaster) address per chain.
+	pub igp_addresses: HashMap<u64, Address>,
+
+	/// Oracle addresses for input and output verification.
+	pub oracles: OperatorOracleConfig,
+
+	/// Valid routes: source chain → [destination chains].
+	pub routes: HashMap<u64, Vec<u64>>,
+
+	/// Optional minimum required `expires` window (seconds) for accepting intents.
+	#[serde(default)]
+	pub intent_min_expiry_seconds: Option<u64>,
+}
+
+/// Oracle addresses for cross-chain verification.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperatorOracleConfig {
+	/// Input oracle addresses per chain.
+	pub input: HashMap<u64, Vec<Address>>,
+
+	/// Output oracle addresses per chain.
+	pub output: HashMap<u64, Vec<Address>>,
+}
+
+/// Oracle selection strategy for direct settlement.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub enum OperatorOracleSelectionStrategy {
+	#[default]
+	First,
+	RoundRobin,
+	Random,
+}
+
+/// Direct settlement configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperatorDirectConfig {
+	/// Dispute period duration in seconds.
+	#[serde(default = "default_dispute_period_seconds")]
+	pub dispute_period_seconds: u64,
+
+	/// Oracle addresses for input and output verification.
+	pub oracles: OperatorOracleConfig,
+
+	/// Valid routes: source chain -> destination chains.
+	pub routes: HashMap<u64, Vec<u64>>,
+
+	/// Strategy for selecting an oracle.
+	#[serde(default)]
+	pub oracle_selection_strategy: OperatorOracleSelectionStrategy,
+
+	/// Optional minimum required `expires` window (seconds) for accepting intents.
+	#[serde(default)]
+	pub intent_min_expiry_seconds: Option<u64>,
+}
+
+/// Chain-specific L2 transaction parameters for the block-hash pusher.
+///
+/// Each variant maps to a specific pusher ABI:
+/// - `Arbitrum` → `IArbitrumPusher.pushHashes(inbox, batchSize, gasPriceBid, gasLimit, submissionCost, isERC20Inbox)`
+/// - `OpStack`  → `IPusher.pushHashes(buffer, firstBlock, batchSize, abi.encode(uint32 gasLimit))`, `msg.value = 0`
+/// - `Linea`    → `IPusher.pushHashes(buffer, firstBlock, batchSize, abi.encode(uint256 fee))`, `msg.value = fee`
+/// - `Raw`      → `IPusher.pushHashes(buffer, firstBlock, batchSize, data)`, `msg.value = value_wei`
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum PusherL2Params {
+	/// Arbitrum Inbox-based pushing (e.g. ETH → ARB direction).
+	Arbitrum {
+		inbox: Address,
+		gas_price_bid: u64,
+		gas_limit: u64,
+		submission_cost: u64,
+		#[serde(default)]
+		is_erc20_inbox: bool,
+	},
+	/// OP Stack chains (Optimism, Base, etc.): `msg.value = 0`,
+	/// `l2TransactionData = abi.encode(uint32 gasLimit)`.
+	OpStack { gas_limit: u32 },
+	/// Linea L1→L2 bridge: `msg.value = fee`,
+	/// `l2TransactionData = abi.encode(uint256 fee)`.
+	Linea { fee: u64 },
+	/// Raw fallback for chains not yet typed (Scroll, ZkSync, unknown).
+	/// `data` is the exact "0x"-prefixed hex for `l2TransactionData`.
+	/// `value_wei` is the exact `msg.value` in wei (defaults to 0 if omitted).
+	Raw {
+		data: String,
+		#[serde(default)]
+		value_wei: Option<u64>,
+	},
+}
+
+/// Configuration for a single L1→L2 block-hash pusher direction, stored in
+/// `OperatorBroadcasterConfig.pusher_directions`.
+///
+/// All fields mirror the `pusher_directions` array entries accepted by the
+/// broadcaster settlement config schema.  `l1_chain_id`, `l2_chain_id`,
+/// `label`, and `batch_size` are optional; defaults are resolved by
+/// `parse_pusher_directions` in the settlement crate.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperatorPusherDirectionConfig {
+	/// L1 pusher contract address.
+	pub pusher_address: Address,
+	/// L2 buffer contract address.
+	pub buffer_address: Address,
+	/// Minimum seconds between consecutive pushes for this direction.
+	pub push_cooldown_seconds: u64,
+	/// Typed L2 parameters for the pusher. Preferred over `l2_transaction_data`.
+	/// When both are present, `l2_params` takes precedence.
+	#[serde(default)]
+	pub l2_params: Option<PusherL2Params>,
+	/// Deprecated: raw hex-encoded L2 transaction data (chain-specific).
+	/// Used only when `l2_params` is absent. Will be removed in Phase 2.
+	#[serde(default)]
+	pub l2_transaction_data: Option<String>,
+	/// Human-readable label (default: "{l1_chain_id}-to-{l2_chain_id}").
+	#[serde(default)]
+	pub label: Option<String>,
+	/// L1 source chain ID (inferred from oracle routes if absent).
+	#[serde(default)]
+	pub l1_chain_id: Option<u64>,
+	/// L2 destination chain ID (inferred from oracle routes if absent).
+	#[serde(default)]
+	pub l2_chain_id: Option<u64>,
+	/// Number of L1 block hashes to push per transaction (default: 256).
+	/// For Arbitrum: defines the look-back window (`block.number - batch_size`).
+	/// For generic chains: sequential blocks pushed from the buffer head.
+	#[serde(default)]
+	pub batch_size: Option<u64>,
+}
+
+/// Broadcaster settlement configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperatorBroadcasterConfig {
+	/// Oracle addresses for input and output verification.
+	pub oracles: OperatorOracleConfig,
+
+	/// Valid routes: source chain -> destination chains.
+	pub routes: HashMap<u64, Vec<u64>>,
+
+	/// Broadcaster contract addresses by destination chain ID.
+	pub broadcaster_addresses: HashMap<u64, Address>,
+
+	/// Receiver contract addresses by source chain ID.
+	pub receiver_addresses: HashMap<u64, Address>,
+
+	/// Broadcaster IDs by remote chain ID.
+	pub broadcaster_ids: HashMap<u64, B256>,
+
+	/// External proof service base URL.
+	pub proof_service_url: String,
+
+	/// Minimum delay after fill before trying to generate proofs.
+	#[serde(default = "default_proof_wait_time_seconds")]
+	pub proof_wait_time_seconds: u64,
+
+	/// Timeout for proof service requests.
+	#[serde(default = "default_storage_proof_timeout_seconds")]
+	pub storage_proof_timeout_seconds: u64,
+
+	/// Default finality blocks before proof generation.
+	#[serde(default = "default_broadcaster_finality_blocks")]
+	pub default_finality_blocks: u64,
+
+	/// Per-chain finality block overrides.
+	#[serde(default)]
+	pub finality_blocks: HashMap<u64, u64>,
+
+	/// Optional per-chain block time overrides in seconds (for intent admission budgeting).
+	#[serde(default)]
+	pub chain_block_time_seconds: HashMap<u64, u64>,
+
+	/// Optional additional safety buffer in seconds (for intent admission budgeting).
+	#[serde(default)]
+	pub intent_safety_buffer_seconds: Option<u64>,
+
+	/// Optional minimum required `expires` window (seconds) for accepting intents.
+	#[serde(default)]
+	pub intent_min_expiry_seconds: Option<u64>,
+
+	/// Strategy for selecting an oracle.
+	#[serde(default)]
+	pub oracle_selection_strategy: OperatorOracleSelectionStrategy,
+	/// Optional L1→L2 block-hash pusher directions for the background push task.
+	#[serde(default)]
+	pub pusher_directions: Vec<OperatorPusherDirectionConfig>,
+}
+
+fn default_dispute_period_seconds() -> u64 {
+	300
+}
+
+fn default_proof_wait_time_seconds() -> u64 {
+	30
+}
+
+fn default_storage_proof_timeout_seconds() -> u64 {
+	30
+}
+
+fn default_broadcaster_finality_blocks() -> u64 {
+	20
+}
+
+fn default_live_fill_estimate_enabled() -> bool {
+	// Default OFF: the public quote endpoint must not perform an
+	// unauthenticated, per-request `eth_estimateGas` by default (audit finding
+	// H-05). Opt in explicitly behind auth / rate limiting / the concurrency cap.
+	false
+}
+
+fn default_live_post_fill_estimate_chain_ids() -> HashSet<u64> {
+	HashSet::new() // empty = disabled everywhere; opt-in per-chain
+}
+
+/// Gas estimation settings per flow type.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperatorGasConfig {
+	/// Gas units for resource-lock flow.
+	pub resource_lock: OperatorGasFlowUnits,
+
+	/// Gas units for permit2 escrow flow.
+	pub permit2_escrow: OperatorGasFlowUnits,
+
+	/// Gas units for EIP-3009 escrow flow.
+	pub eip3009_escrow: OperatorGasFlowUnits,
+
+	/// When true, quote-time pricing performs `eth_estimateGas` for the fill
+	/// leg and uses the result instead of the configured per-flow `fill` units.
+	/// Other legs (open/claim) stay static.
+	///
+	/// Defaults to `false`: the quote endpoint is public/unauthenticated, and a
+	/// default-on live `eth_estimateGas` per request is an RPC-amplification
+	/// vector (audit finding H-05). Operators who want live fill estimation
+	/// should enable it explicitly and pair it with authentication and/or the
+	/// per-chain concurrency cap and request rate limiting.
+	#[serde(default = "default_live_fill_estimate_enabled")]
+	pub live_fill_estimate_enabled: bool,
+
+	/// Set of chain IDs on which quote-time post-fill gas estimation
+	/// uses the stateOverride-based live path. Empty (default) = disabled
+	/// on all chains. Operators add chain IDs after validating the
+	/// OutputSettler's storage layout via the integration test.
+	///
+	/// Per-chain rather than global because the storage-layout
+	/// assumption is per-chain (different OutputSettler deployments
+	/// may have different impl versions or even different contract
+	/// shapes per chain).
+	#[serde(default = "default_live_post_fill_estimate_chain_ids")]
+	pub live_post_fill_estimate_chain_ids: HashSet<u64>,
+}
+
+/// Gas units for each step in an order flow.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct OperatorGasFlowUnits {
+	/// Gas units for open/prepare step.
+	pub open: u64,
+
+	/// Gas units for fill step.
+	pub fill: u64,
+
+	/// Gas units for post-fill settlement step.
+	#[serde(default)]
+	pub post_fill: u64,
+
+	/// Gas units for pre-claim settlement step.
+	#[serde(default)]
+	pub pre_claim: u64,
+
+	/// Gas units for claim/finalize step.
+	pub claim: u64,
+}
+
+/// Pricing provider configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperatorPricingConfig {
+	/// Primary pricing provider (e.g., "coingecko", "defillama").
+	pub primary: String,
+
+	/// Fallback providers in order of preference.
+	pub fallbacks: Vec<String>,
+
+	/// Cache duration in seconds for price data.
+	pub cache_duration_seconds: u64,
+
+	/// Custom token prices in USD for tokens not on price feeds.
+	/// Key is token symbol, value is price as decimal string.
+	#[serde(default)]
+	pub custom_prices: HashMap<String, String>,
+}
+
+/// Solver behavior settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperatorSolverConfig {
+	/// Minimum profitability percentage required to execute orders.
+	#[serde(with = "rust_decimal::serde::str")]
+	pub min_profitability_pct: Decimal,
+
+	/// Gas buffer in basis points (e.g., 1000 = 10%).
+	/// Applied as safety margin on gas cost estimates.
+	#[serde(default = "default_gas_buffer_bps")]
+	pub gas_buffer_bps: u32,
+
+	/// Settlement native fee buffer in basis points (e.g., 1000 = 10%).
+	/// Applied as safety margin on native settlement message fee quotes.
+	#[serde(default = "default_settlement_fee_buffer_bps")]
+	pub settlement_fee_buffer_bps: u32,
+
+	/// Commission in basis points (e.g., 20 = 0.20%).
+	/// Added to solver profit requirement.
+	#[serde(default = "default_commission_bps")]
+	pub commission_bps: u32,
+
+	/// Rate buffer in basis points (e.g., 14 = 0.14%).
+	/// Applied to exchange rate to protect against price volatility.
+	#[serde(default = "default_rate_buffer_bps")]
+	pub rate_buffer_bps: u32,
+
+	/// Timeout in seconds for monitoring transactions.
+	pub monitoring_timeout_seconds: u64,
+
+	/// Optional path to a JSON file containing denied Ethereum addresses.
+	/// The file must contain a JSON array of lowercase hex strings (e.g. `["0xabc...", ...]`).
+	/// When set, any intent whose sender or recipient appears in the list is rejected.
+	#[serde(default)]
+	pub deny_list: Option<String>,
+
+	/// Whether ResourceLock orders are accepted by this solver.
+	#[serde(default)]
+	pub resource_lock_enabled: bool,
+}
+
+fn default_gas_buffer_bps() -> u32 {
+	1000 // 10%
+}
+
+fn default_settlement_fee_buffer_bps() -> u32 {
+	1000 // 10%
+}
+
+fn default_commission_bps() -> u32 {
+	0 // Disabled by default for backward compatibility (was not used before)
+}
+
+fn default_rate_buffer_bps() -> u32 {
+	14 // 0.14%
+}
+
+/// Admin authentication settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperatorAdminConfig {
+	/// Whether admin authentication is enabled.
+	pub enabled: bool,
+
+	/// Domain for EIP-712 signature verification.
+	pub domain: String,
+
+	/// Chain ID for EIP-712 domain separator.
+	pub chain_id: u64,
+
+	/// Nonce TTL in seconds.
+	pub nonce_ttl_seconds: u64,
+
+	/// Typed admin whitelist entries.
+	#[serde(default)]
+	pub whitelist: Vec<AdminWhitelistEntry>,
+
+	/// Withdrawal policy for admin-initiated transfers.
+	#[serde(default)]
+	pub withdrawals: OperatorWithdrawalsConfig,
+}
+
+/// Withdrawal policy configuration.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OperatorWithdrawalsConfig {
+	/// Whether withdrawals are enabled.
+	#[serde(default)]
+	pub enabled: bool,
+
+	/// Permitted recipient addresses for `POST /admin/withdrawals`.
+	///
+	/// When non-empty, the admin handler rejects any withdrawal whose
+	/// `recipient` is not present in this list. This caps the blast radius of
+	/// a single compromised admin key: the attacker can only redirect funds to
+	/// addresses the operator pre-approved (e.g. a cold-storage multisig),
+	/// not an attacker-controlled address.
+	///
+	/// When empty (default), withdrawals to any recipient are permitted,
+	/// preserving previous behavior for deployments that haven't yet pinned a
+	/// recipient set.
+	#[serde(default)]
+	pub recipient_allowlist: Vec<Address>,
+}
+
+impl OperatorWithdrawalsConfig {
+	/// Whether the supplied recipient is permitted by the configured policy.
+	///
+	/// An empty `recipient_allowlist` is treated as "no constraint" — every
+	/// recipient is accepted. Once the allowlist contains at least one
+	/// address, the recipient must match one of those entries exactly.
+	pub fn recipient_allowed(&self, recipient: &Address) -> bool {
+		if self.recipient_allowlist.is_empty() {
+			return true;
+		}
+		self.recipient_allowlist.contains(recipient)
+	}
+}
+
+/// Cross-chain rebalancing configuration.
+///
+/// Policy fields (enabled, thresholds, intervals) are hot-reloadable via admin API.
+/// Transport wiring (implementation, bridge_config) is static and requires a restart.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperatorRebalanceConfig {
+	/// Master switch for auto-rebalancing.
+	pub enabled: bool,
+
+	/// Which bridge backend to use (e.g., "layerzero_vaultbridge").
+	/// Static — requires restart to change.
+	pub implementation: String,
+
+	/// How often the monitor checks balances (seconds).
+	#[serde(default = "default_monitor_interval")]
+	pub monitor_interval_seconds: u64,
+
+	/// Minimum time between auto-rebalances for the same pair (seconds).
+	#[serde(default = "default_cooldown")]
+	pub cooldown_seconds: u64,
+
+	/// Maximum concurrent bridge transfers across all pairs.
+	#[serde(default = "default_max_pending")]
+	pub max_pending_transfers: u32,
+
+	/// Minimum native gas balance per chain (keyed by chain ID, decimal string in wei).
+	/// The monitor skips rebalancing from a chain if its native balance is below this.
+	#[serde(default)]
+	pub min_native_gas_reserve: HashMap<u64, String>,
+
+	/// Maximum acceptable bridge fee in basis points relative to the transfer amount.
+	/// If the quoted fee exceeds this, the auto-rebalance is skipped.
+	#[serde(default)]
+	pub max_fee_bps: Option<u32>,
+
+	/// Cross-chain rebalance pairs. Each pair is one logical asset across two chains.
+	#[serde(default)]
+	pub pairs: Vec<OperatorRebalancePairConfig>,
+
+	/// Implementation-specific transport config (e.g., LayerZero endpoint IDs, composer addresses).
+	/// Static — requires restart to change. Deserialized by the bridge implementation.
+	#[serde(default)]
+	pub bridge_config: Option<serde_json::Value>,
+}
+
+fn default_monitor_interval() -> u64 {
+	60
+}
+fn default_cooldown() -> u64 {
+	3600
+}
+fn default_max_pending() -> u32 {
+	3
+}
+
+/// A rebalance pair represents ONE logical asset bridged between TWO chains.
+/// For MVP: USDC on Ethereum <-> vbUSDC on Katana.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperatorRebalancePairConfig {
+	/// Unique, operator-chosen identifier for this pair (e.g., "usdc-eth-katana").
+	/// Used as the key for cooldowns, transfer lookups, storage indexes, and API responses.
+	/// Must be unique across all configured pairs.
+	pub pair_id: String,
+
+	/// Chain A side of the pair (e.g., Ethereum).
+	pub chain_a: RebalancePairSide,
+
+	/// Chain B side of the pair (e.g., Katana).
+	pub chain_b: RebalancePairSide,
+
+	/// Target balance for chain A in nominal units (decimal string in base units).
+	pub target_balance_a: String,
+
+	/// Target balance for chain B in nominal units (decimal string in base units).
+	pub target_balance_b: String,
+
+	/// Acceptable deviation in basis points (e.g., 2000 = +/-20%).
+	pub deviation_band_bps: u32,
+
+	/// Maximum amount per bridge operation (decimal string in nominal units).
+	pub max_bridge_amount: String,
+
+	/// Bridge-implementation-opaque route blob (per-pair). Deserialized by the
+	/// bridge implementation referenced in `OperatorRebalanceConfig.implementation`.
+	/// For LayerZero this is `LayerZeroBridgeRoute` (composer, vault, per-side
+	/// wrapper + approval_required). Static — requires restart to change.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub bridge_route: Option<serde_json::Value>,
+}
+
+/// Operator-facing bootstrap mirror of `solver_config::TxBumpConfig`.
+/// Translated to the runtime type in `solver-service/src/config_merge.rs`.
+///
+/// Defined here (not in `solver-config`) to avoid a crate cycle:
+/// `solver-types` is the dependency floor for both `solver-config` and
+/// `solver-service`. Translation lives in `config_merge.rs`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct OperatorTxBumpConfig {
+	pub enabled: bool,
+	pub sweep_interval_secs: Option<u64>,
+	pub default_pending_threshold_secs: Option<u64>,
+	pub default_bump_percent: Option<u32>,
+	pub default_max_replacements_per_stage: Option<u32>,
+	pub default_max_fee_per_gas_cap_wei: Option<String>,
+	pub default_max_priority_fee_per_gas_cap_wei: Option<String>,
+	/// Bootstrap mirror of
+	/// `solver_config::TxBumpConfig::default_profitability_gate_fail_closed`.
+	/// `None` resolves to the runtime default (`false`).
+	pub default_profitability_gate_fail_closed: Option<bool>,
+	pub default_receipt_preflight_fail_closed: Option<bool>,
+	pub chains: HashMap<u64, OperatorTxBumpChainConfig>,
+}
+
+/// Operator-facing bootstrap mirror of `solver_config::TxBumpChainConfig`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct OperatorTxBumpChainConfig {
+	pub pending_threshold_secs: Option<u64>,
+	pub bump_percent: Option<u32>,
+	pub max_replacements_per_stage: Option<u32>,
+	pub max_fee_per_gas_cap_wei: Option<String>,
+	pub max_priority_fee_per_gas_cap_wei: Option<String>,
+	/// Bootstrap mirror of
+	/// `solver_config::TxBumpChainConfig::profitability_gate_fail_closed`.
+	pub profitability_gate_fail_closed: Option<bool>,
+	pub receipt_preflight_fail_closed: Option<bool>,
+}
+
+/// One side of a rebalance pair.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RebalancePairSide {
+	/// Chain ID (e.g., 1 for Ethereum, 747474 for Katana).
+	pub chain_id: u64,
+
+	/// Token contract address on this chain (balance-bearing ERC-20).
+	pub token_address: Address,
+
+	/// OFT contract address on this chain (LayerZero transport contract).
+	pub oft_address: Address,
+}
+
+impl OperatorConfig {
+	/// Get a network configuration by chain ID.
+	pub fn get_network(&self, chain_id: u64) -> Option<&OperatorNetworkConfig> {
+		self.networks.get(&chain_id)
+	}
+
+	/// Get a mutable network configuration by chain ID.
+	pub fn get_network_mut(&mut self, chain_id: u64) -> Option<&mut OperatorNetworkConfig> {
+		self.networks.get_mut(&chain_id)
+	}
+
+	/// Get all chain IDs configured in this operator config.
+	pub fn chain_ids(&self) -> Vec<u64> {
+		self.networks.keys().copied().collect()
+	}
+
+	/// Check if an address is an authorized admin.
+	pub fn is_admin(&self, address: &Address) -> bool {
+		self.admin.is_authorized(address)
+	}
+}
+
+impl OperatorNetworkConfig {
+	/// Find a token by symbol.
+	pub fn get_token_by_symbol(&self, symbol: &str) -> Option<&OperatorToken> {
+		self.tokens.iter().find(|t| t.symbol == symbol)
+	}
+
+	/// Find a token by address.
+	pub fn get_token_by_address(&self, address: &Address) -> Option<&OperatorToken> {
+		self.tokens.iter().find(|t| &t.address == address)
+	}
+
+	/// Check if a token exists by address.
+	pub fn has_token(&self, address: &Address) -> bool {
+		self.tokens.iter().any(|t| &t.address == address)
+	}
+
+	/// Get the primary HTTP RPC URL.
+	pub fn get_http_url(&self) -> Option<&str> {
+		self.rpc_urls.first().map(|r| r.http.as_str())
+	}
+
+	/// Get the primary WebSocket URL if available.
+	pub fn get_ws_url(&self) -> Option<&str> {
+		self.rpc_urls.iter().find_map(|r| r.ws.as_deref())
+	}
+}
+
+impl OperatorAdminConfig {
+	/// Check if admin authentication is enabled and address is authorized.
+	pub fn is_authorized(&self, address: &Address) -> bool {
+		self.enabled && self.role_for(address) == Some(AdminRole::Admin)
+	}
+
+	/// Resolve an address to an admin role.
+	pub fn role_for(&self, address: &Address) -> Option<AdminRole> {
+		self.whitelist
+			.iter()
+			.find(|entry| entry.address == *address)
+			.map(|entry| entry.role)
+	}
+
+	/// Return full-admin addresses derived from the typed whitelist.
+	pub fn admin_addresses(&self) -> Vec<Address> {
+		self.whitelist
+			.iter()
+			.filter(|entry| entry.role == AdminRole::Admin)
+			.map(|entry| entry.address)
+			.collect()
+	}
+
+	/// Return normalized typed whitelist entries from legacy + typed sources.
+	pub fn normalize_whitelist(
+		admin_addresses: &[Address],
+		whitelist: &[AdminWhitelistEntry],
+	) -> Vec<AdminWhitelistEntry> {
+		normalize_admin_whitelist(admin_addresses, whitelist)
+	}
+
+	/// Add an admin address.
+	pub fn add_admin(&mut self, address: Address) -> bool {
+		if self.role_for(&address) == Some(AdminRole::Admin) {
+			false
+		} else {
+			upsert_admin_role(&mut self.whitelist, address, AdminRole::Admin);
+			true
+		}
+	}
+
+	/// Set a wallet role in the typed whitelist.
+	///
+	/// Unlike `upsert_admin_role` (which preserves admin-wins semantics for
+	/// config-load merges), this performs a faithful assignment: an explicit
+	/// admin action may demote Admin → ReadOnly. Returns true if the stored
+	/// role changed.
+	pub fn set_role(&mut self, address: Address, role: AdminRole) -> bool {
+		if let Some(entry) = self
+			.whitelist
+			.iter_mut()
+			.find(|entry| entry.address == address)
+		{
+			if entry.role == role {
+				false
+			} else {
+				entry.role = role;
+				true
+			}
+		} else {
+			self.whitelist.push(AdminWhitelistEntry { address, role });
+			true
+		}
+	}
+
+	/// Remove an admin address.
+	pub fn remove_admin(&mut self, address: &Address) -> bool {
+		if let Some(pos) = self
+			.whitelist
+			.iter()
+			.position(|entry| &entry.address == address)
+		{
+			self.whitelist.remove(pos);
+			true
+		} else {
+			false
+		}
+	}
+}
+
+impl Default for OperatorAdminConfig {
+	fn default() -> Self {
+		Self {
+			enabled: false,
+			domain: String::new(),
+			chain_id: 1,
+			nonce_ttl_seconds: 300,
+			whitelist: Vec::new(),
+			withdrawals: OperatorWithdrawalsConfig::default(),
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::str::FromStr;
+
+	#[test]
+	fn operator_gas_config_defaults_live_fill_estimate_off() {
+		// H-05 regression: when the gas config omits `live_fill_estimate_enabled`
+		// it must deserialize to `false` so the public quote path does not
+		// perform an unauthenticated `eth_estimateGas` by default.
+		let json = serde_json::json!({
+			"resource_lock": {"open": 1, "fill": 1, "claim": 1},
+			"permit2_escrow": {"open": 1, "fill": 1, "claim": 1},
+			"eip3009_escrow": {"open": 1, "fill": 1, "claim": 1}
+		});
+		let cfg: OperatorGasConfig =
+			serde_json::from_value(json).expect("OperatorGasConfig should deserialize");
+		assert!(
+			!cfg.live_fill_estimate_enabled,
+			"live_fill_estimate_enabled must default to false (H-05)"
+		);
+	}
+
+	fn test_address() -> Address {
+		Address::from_str("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").unwrap()
+	}
+
+	fn test_token_address() -> Address {
+		Address::from_str("0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85").unwrap()
+	}
+
+	#[test]
+	fn test_withdrawals_recipient_allowed_empty_allowlist_permits_any() {
+		let policy = OperatorWithdrawalsConfig {
+			enabled: true,
+			recipient_allowlist: vec![],
+		};
+		assert!(policy.recipient_allowed(&test_address()));
+		assert!(policy.recipient_allowed(&test_token_address()));
+	}
+
+	#[test]
+	fn test_withdrawals_recipient_allowed_non_empty_allowlist_enforces_match() {
+		let approved = test_address();
+		let policy = OperatorWithdrawalsConfig {
+			enabled: true,
+			recipient_allowlist: vec![approved],
+		};
+		assert!(policy.recipient_allowed(&approved));
+		assert!(!policy.recipient_allowed(&test_token_address()));
+	}
+
+	#[test]
+	fn test_operator_token_serialization() {
+		let token = OperatorToken {
+			symbol: "USDC".to_string(),
+			name: Some("USD Coin".to_string()),
+			address: test_token_address(),
+			decimals: 6,
+		};
+
+		let json = serde_json::to_string(&token).unwrap();
+		let parsed: OperatorToken = serde_json::from_str(&json).unwrap();
+
+		assert_eq!(parsed.symbol, "USDC");
+		assert_eq!(parsed.name, Some("USD Coin".to_string()));
+		assert_eq!(parsed.decimals, 6);
+		assert_eq!(parsed.address, token.address);
+	}
+
+	#[test]
+	fn test_operator_admin_config() {
+		let mut admin = OperatorAdminConfig {
+			enabled: true,
+			domain: "test.example.com".to_string(),
+			chain_id: 1,
+			nonce_ttl_seconds: 300,
+			whitelist: vec![AdminWhitelistEntry {
+				address: test_address(),
+				role: AdminRole::Admin,
+			}],
+			withdrawals: OperatorWithdrawalsConfig::default(),
+		};
+
+		assert!(admin.is_authorized(&test_address()));
+
+		let other = Address::from_str("0x70997970C51812dc3A010C7d01b50e0d17dc79C8").unwrap();
+		assert!(!admin.is_authorized(&other));
+
+		// Add new admin
+		assert!(admin.add_admin(other));
+		assert!(admin.is_authorized(&other));
+
+		// Can't add duplicate
+		assert!(!admin.add_admin(other));
+
+		// Remove admin
+		assert!(admin.remove_admin(&other));
+		assert!(!admin.is_authorized(&other));
+
+		// Can't remove non-existent
+		assert!(!admin.remove_admin(&other));
+	}
+
+	#[test]
+	fn test_operator_network_config_tokens() {
+		let network = OperatorNetworkConfig {
+			chain_id: 10,
+			name: "optimism".to_string(),
+			network_type: NetworkType::Parent,
+			tokens: vec![
+				OperatorToken {
+					symbol: "USDC".to_string(),
+					name: Some("USD Coin".to_string()),
+					address: test_token_address(),
+					decimals: 6,
+				},
+				OperatorToken {
+					symbol: "WETH".to_string(),
+					name: Some("Wrapped Ether".to_string()),
+					address: test_address(),
+					decimals: 18,
+				},
+			],
+			rpc_urls: vec![OperatorRpcEndpoint::http_only(
+				"https://rpc.example.com".to_string(),
+			)],
+			input_settler_address: test_address(),
+			output_settler_address: test_address(),
+			input_settler_compact_address: None,
+			the_compact_address: None,
+			allocator_address: None,
+		};
+
+		assert!(network.get_token_by_symbol("USDC").is_some());
+		assert!(network.get_token_by_symbol("DAI").is_none());
+
+		assert!(network.has_token(&test_token_address()));
+		assert!(!network
+			.has_token(&Address::from_str("0x1111111111111111111111111111111111111111").unwrap()));
+
+		assert_eq!(network.get_http_url(), Some("https://rpc.example.com"));
+		assert_eq!(network.get_ws_url(), None);
+	}
+
+	#[test]
+	fn test_rpc_endpoint() {
+		let http_only = OperatorRpcEndpoint::http_only("https://rpc.example.com".to_string());
+		assert_eq!(http_only.http, "https://rpc.example.com");
+		assert!(http_only.ws.is_none());
+
+		let with_ws = OperatorRpcEndpoint::with_ws(
+			"https://rpc.example.com".to_string(),
+			"wss://ws.example.com".to_string(),
+		);
+		assert_eq!(with_ws.http, "https://rpc.example.com");
+		assert_eq!(with_ws.ws, Some("wss://ws.example.com".to_string()));
+	}
+
+	#[test]
+	fn test_operator_config_json_roundtrip() {
+		let config = OperatorConfig {
+			solver_id: "test-solver".to_string(),
+			solver_name: Some("Test Solver".to_string()),
+			networks: {
+				let mut networks = HashMap::new();
+				networks.insert(
+					10,
+					OperatorNetworkConfig {
+						chain_id: 10,
+						name: "optimism".to_string(),
+						network_type: NetworkType::Parent,
+						tokens: vec![OperatorToken {
+							symbol: "USDC".to_string(),
+							name: Some("USD Coin".to_string()),
+							address: test_token_address(),
+							decimals: 6,
+						}],
+						rpc_urls: vec![OperatorRpcEndpoint::http_only(
+							"https://rpc.example.com".to_string(),
+						)],
+						input_settler_address: test_address(),
+						output_settler_address: test_address(),
+						input_settler_compact_address: Some(test_address()),
+						the_compact_address: Some(test_address()),
+						allocator_address: Some(test_address()),
+					},
+				);
+				networks
+			},
+			settlement: OperatorSettlementConfig {
+				settlement_poll_interval_seconds: 10,
+				settlement_type: OperatorSettlementType::Hyperlane,
+				priority: None,
+				hyperlane: Some(OperatorHyperlaneConfig {
+					default_gas_limit: 300_000,
+					message_timeout_seconds: 600,
+					finalization_required: true,
+					mailboxes: HashMap::new(),
+					igp_addresses: HashMap::new(),
+					oracles: OperatorOracleConfig {
+						input: HashMap::new(),
+						output: HashMap::new(),
+					},
+					routes: HashMap::new(),
+					intent_min_expiry_seconds: None,
+				}),
+				direct: None,
+				broadcaster: None,
+			},
+			gas: OperatorGasConfig {
+				resource_lock: OperatorGasFlowUnits {
+					open: 0,
+					fill: 77298,
+					post_fill: 300_000,
+					pre_claim: 0,
+					claim: 122793,
+				},
+				permit2_escrow: OperatorGasFlowUnits::default(),
+				eip3009_escrow: OperatorGasFlowUnits::default(),
+				live_fill_estimate_enabled: true,
+				live_post_fill_estimate_chain_ids: HashSet::new(),
+			},
+			pricing: OperatorPricingConfig {
+				primary: "coingecko".to_string(),
+				fallbacks: vec!["defillama".to_string()],
+				cache_duration_seconds: 60,
+				custom_prices: HashMap::new(),
+			},
+			solver: OperatorSolverConfig {
+				min_profitability_pct: Decimal::ONE,
+				gas_buffer_bps: 1000,
+				settlement_fee_buffer_bps: 1000,
+				commission_bps: 20,
+				rate_buffer_bps: 14,
+				monitoring_timeout_seconds: 28800,
+				deny_list: None,
+				resource_lock_enabled: false,
+			},
+			admin: OperatorAdminConfig {
+				enabled: true,
+				domain: "test.example.com".to_string(),
+				chain_id: 1,
+				nonce_ttl_seconds: 300,
+				whitelist: vec![AdminWhitelistEntry {
+					address: test_address(),
+					role: AdminRole::Admin,
+				}],
+				withdrawals: OperatorWithdrawalsConfig::default(),
+			},
+			orders_auth_enabled: false,
+			account: None,
+			rebalance: None,
+			fee_policy: None,
+			tx_bump: OperatorTxBumpConfig::default(),
+		};
+
+		let json = serde_json::to_string_pretty(&config).unwrap();
+		let parsed: OperatorConfig = serde_json::from_str(&json).unwrap();
+
+		assert_eq!(parsed.solver_id, "test-solver");
+		assert_eq!(parsed.solver_name, Some("Test Solver".to_string()));
+		assert_eq!(parsed.networks.len(), 1);
+		assert!(parsed.networks.contains_key(&10));
+		assert_eq!(parsed.admin.admin_addresses().len(), 1);
+		assert_eq!(parsed.gas.resource_lock.fill, 77298);
+		assert_eq!(
+			parsed.settlement.settlement_type,
+			OperatorSettlementType::Hyperlane
+		);
+		assert!(parsed.settlement.priority.is_none());
+		assert!(parsed.settlement.hyperlane.is_some());
+		assert!(parsed.settlement.direct.is_none());
+	}
+
+	#[test]
+	fn test_operator_config_deserializes_legacy_network_without_name() {
+		let json = serde_json::json!({
+			"solver_id": "legacy-solver",
+			"networks": {
+				"10": {
+					"chain_id": 10,
+					"tokens": [{
+						"symbol": "USDC",
+						"address": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+						"decimals": 6
+					}],
+					"rpc_urls": [{
+						"http": "https://rpc.example.com",
+						"ws": null
+					}],
+					"input_settler_address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+					"output_settler_address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+					"input_settler_compact_address": null,
+					"the_compact_address": null,
+					"allocator_address": null
+				}
+			},
+			"settlement": {
+				"settlement_poll_interval_seconds": 10,
+				"hyperlane": {
+					"default_gas_limit": 300000,
+					"message_timeout_seconds": 600,
+					"finalization_required": true,
+					"mailboxes": {},
+					"igp_addresses": {},
+					"oracles": {"input": {}, "output": {}},
+					"routes": {}
+				}
+			},
+			"gas": {
+				"resource_lock": {"open": 0, "fill": 77298, "claim": 122793},
+				"permit2_escrow": {"open": 0, "fill": 0, "claim": 0},
+				"eip3009_escrow": {"open": 0, "fill": 0, "claim": 0}
+			},
+			"pricing": {
+				"primary": "coingecko",
+				"fallbacks": [],
+				"cache_duration_seconds": 60,
+				"custom_prices": {}
+			},
+			"solver": {
+				"min_profitability_pct": "1",
+				"gas_buffer_bps": 1000,
+				"commission_bps": 0,
+				"rate_buffer_bps": 14,
+				"monitoring_timeout_seconds": 28800
+			},
+			"admin": {
+				"enabled": false,
+				"domain": "",
+				"chain_id": 1,
+				"nonce_ttl_seconds": 300,
+				"whitelist": [],
+				"withdrawals": {"enabled": false}
+			},
+			"account": null
+		});
+
+		let parsed: OperatorConfig = serde_json::from_value(json).unwrap();
+		let network = parsed.networks.get(&10).unwrap();
+		assert_eq!(network.name, "unknown");
+		assert_eq!(network.network_type, NetworkType::New);
+		assert_eq!(
+			parsed.settlement.settlement_type,
+			OperatorSettlementType::Hyperlane
+		);
+		assert!(parsed.settlement.hyperlane.is_some());
+	}
+
+	#[test]
+	fn test_operator_solver_config_defaults_settlement_fee_buffer_bps() {
+		let json = serde_json::json!({
+			"min_profitability_pct": "1",
+			"monitoring_timeout_seconds": 28800
+		});
+
+		let parsed: OperatorSolverConfig = serde_json::from_value(json).unwrap();
+
+		assert_eq!(parsed.settlement_fee_buffer_bps, 1000);
+	}
+
+	#[test]
+	fn test_operator_solver_config_defaults_resource_lock_enabled_false() {
+		let json = serde_json::json!({
+			"min_profitability_pct": "1",
+			"monitoring_timeout_seconds": 28800
+		});
+
+		let parsed: OperatorSolverConfig = serde_json::from_value(json).unwrap();
+
+		assert!(!parsed.resource_lock_enabled);
+	}
+
+	#[test]
+	fn test_operator_solver_config_parses_resource_lock_enabled_true() {
+		let json = serde_json::json!({
+			"min_profitability_pct": "1",
+			"monitoring_timeout_seconds": 28800,
+			"resource_lock_enabled": true
+		});
+
+		let parsed: OperatorSolverConfig = serde_json::from_value(json).unwrap();
+
+		assert!(parsed.resource_lock_enabled);
+	}
+}

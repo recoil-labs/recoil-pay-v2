@@ -1,0 +1,39 @@
+/**
+ * LinkiSwap docs theme.
+ * Palette mirrors the V2 product UI (see linkiswap-website-v2/src/globals.css).
+ */
+
+:root {
+  --ifm-color-primary: #424af6;
+  --ifm-color-primary-dark: #2d36f4;
+  --ifm-color-primary-darker: #212bf3;
+  --ifm-color-primary-darkest: #0b16d0;
+  --ifm-color-primary-light: #5b62f8;
+  --ifm-color-primary-lighter: #6a71f8;
+  --ifm-color-primary-lightest: #969bfb;
+
+  --ifm-code-font-size: 92%;
+  --ifm-font-family-base: 'Inter', system-ui, -apple-system, sans-serif;
+  --ifm-font-family-monospace: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+  --docusaurus-highlighted-code-line-bg: rgba(66, 74, 246, 0.1);
+}
+
+[data-theme='dark'] {
+  --ifm-background-color: #00071f;
+  --ifm-background-surface-color: #060c22;
+  --ifm-color-primary: #61e5fc;
+  --ifm-color-primary-dark: #3fdbfa;
+  --ifm-color-primary-darker: #2ed6fa;
+  --ifm-color-primary-darkest: #08b7de;
+  --ifm-color-primary-light: #83effd;
+  --ifm-color-primary-lighter: #94f2fd;
+  --ifm-color-primary-lightest: #c8f8fe;
+
+  --docusaurus-highlighted-code-line-bg: rgba(97, 229, 252, 0.12);
+}
+
+/* Slightly tighter reading column for docs prose. */
+.markdown > h1 {
+  --ifm-h1-font-size: 2.4rem;
+}

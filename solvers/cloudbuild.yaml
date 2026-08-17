@@ -1,0 +1,29 @@
+# Cloud Build config for the operator portal.
+#
+# The API base URL must be passed as a build arg, not set at runtime:
+# Vite inlines VITE_* into the bundle at build time, so a container env
+# var would arrive too late and the shipped JS would call a relative
+# path. `gcloud builds submit --tag` cannot pass build args, hence this
+# config.
+
+substitutions:
+  _AGGREGATOR_URL: https://linkiswap-aggregator-155541213920.us-central1.run.app
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --build-arg=VITE_API_BASE_URL=${_AGGREGATOR_URL}
+      - --build-arg=VITE_OIF_API_BASE_URL=${_AGGREGATOR_URL}
+      - --build-arg=VITE_SOLVER_API_BASE_URL=${_AGGREGATOR_URL}
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/linkiswap/solver-portal:latest
+      - .
+
+images:
+  - us-central1-docker.pkg.dev/$PROJECT_ID/linkiswap/solver-portal:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1800s

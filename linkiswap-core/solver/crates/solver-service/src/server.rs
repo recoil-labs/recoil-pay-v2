@@ -1,0 +1,2475 @@
+//! HTTP server for the OIF Solver API.
+//!
+//! This module provides a minimal HTTP server infrastructure
+//! for the OIF Solver API.
+
+use crate::{
+	apis::admin::{
+		handle_add_token, handle_add_tokens, handle_approve_tokens, handle_get_balances,
+		handle_get_config, handle_get_fees, handle_get_gas, handle_get_nonce, handle_get_types,
+		handle_get_whitelist, handle_remove_admin, handle_remove_token, handle_set_admin_role,
+		handle_update_fees, handle_update_gas, handle_withdrawal, AdminApiState,
+	},
+	apis::health::handle_health,
+	apis::order::get_order_by_id,
+	auth::{admin::AdminActionVerifier, auth_middleware, AuthState, JwtService},
+	config_merge::config_to_operator_config,
+	validators::order::ensure_user_capacity_for_order,
+	validators::signature::SignatureValidationService,
+};
+use alloy_primitives::U256;
+use axum::{
+	extract::DefaultBodyLimit,
+	extract::{Extension, Path, State},
+	http::StatusCode,
+	middleware,
+	response::{IntoResponse, Json},
+	routing::{delete, get, post, put},
+	Router, ServiceExt,
+};
+use serde_json::Value;
+use solver_config::{ApiConfig, Config};
+use solver_core::SolverEngine;
+use solver_storage::{
+	config_store::create_config_store,
+	create_storage_backend,
+	nonce_store::{create_nonce_store, create_nonce_store_with_namespace, NonceStore},
+	StoreConfig,
+};
+use solver_types::{
+	api::PostOrderRequest,
+	standards::eip7683::{interfaces::StandardOrder, LockType},
+	APIError, Address, ApiErrorType, GetOrderResponse, GetQuoteRequest, GetQuoteResponse,
+	OperatorConfig, Order, OrderIdCallback, Transaction,
+};
+use std::{convert::TryInto, net::SocketAddr, sync::Arc};
+use tokio::net::TcpListener;
+use tokio::sync::RwLock;
+use tower::ServiceBuilder;
+use tower_http::cors::CorsLayer;
+use tower_http::normalize_path::NormalizePath;
+
+/// Shared application state for the API server.
+#[derive(Clone)]
+pub struct AppState {
+	/// Reference to the solver engine for processing requests.
+	pub solver: Arc<SolverEngine>,
+	/// Shared runtime config that gets hot-reloaded by admin API.
+	/// Always use this for reading current config (tokens, networks, etc.).
+	pub config: Arc<RwLock<Config>>,
+	/// Discovery implementation that ingests orders submitted via /orders (if configured).
+	pub discovery_impl: Option<String>,
+	/// JWT service for authentication (if configured).
+	pub jwt_service: Option<Arc<JwtService>>,
+	/// Dedicated nonce store for SIWE authentication (if configured).
+	pub siwe_nonce_store: Option<Arc<NonceStore>>,
+	/// Signature validation service for different order standards.
+	pub signature_validation: Arc<SignatureValidationService>,
+}
+
+fn create_admin_storage_backend(
+	redis_url: String,
+	cluster_mode: bool,
+) -> Result<std::sync::Arc<dyn solver_storage::StorageInterface>, Box<dyn std::error::Error>> {
+	create_storage_backend(StoreConfig::Redis {
+		url: redis_url,
+		cluster_mode,
+	})
+	.map_err(|e| {
+		tracing::error!("Failed to create admin storage backend: {}", e);
+		Box::new(std::io::Error::other(format!("Admin storage error: {e}")))
+			as Box<dyn std::error::Error>
+	})
+}
+
+fn create_admin_config_store(
+	admin_storage: std::sync::Arc<dyn solver_storage::StorageInterface>,
+	solver_id: &str,
+) -> Result<
+	Arc<dyn solver_storage::config_store::ConfigStore<OperatorConfig>>,
+	Box<dyn std::error::Error>,
+> {
+	if solver_id.is_empty() {
+		return Err(Box::new(std::io::Error::other(
+			"Config store error: solver ID cannot be empty",
+		)));
+	}
+
+	create_config_store::<OperatorConfig>(
+		StoreConfig::Storage(admin_storage),
+		format!("{solver_id}-operator"),
+	)
+	.map(Arc::from)
+	.map_err(|e| {
+		tracing::error!("Failed to create operator config store: {}", e);
+		Box::new(std::io::Error::other(format!("Config store error: {e}")))
+			as Box<dyn std::error::Error>
+	})
+}
+
+fn create_admin_nonce_store(
+	admin_storage: std::sync::Arc<dyn solver_storage::StorageInterface>,
+	solver_id: &str,
+	nonce_ttl_seconds: u64,
+) -> Result<solver_storage::nonce_store::NonceStore, Box<dyn std::error::Error>> {
+	create_nonce_store(
+		StoreConfig::Storage(admin_storage),
+		solver_id,
+		nonce_ttl_seconds,
+	)
+	.map_err(|e| {
+		tracing::error!("Failed to initialize admin nonce store: {}", e);
+		Box::new(std::io::Error::other(format!("Nonce store error: {e}")))
+			as Box<dyn std::error::Error>
+	})
+}
+
+/// Starts the HTTP server for the API.
+///
+/// This function creates and configures the HTTP server with routing,
+/// middleware, and error handling for the endpoint.
+pub async fn start_server(
+	api_config: ApiConfig,
+	solver: Arc<SolverEngine>,
+) -> Result<(), Box<dyn std::error::Error>> {
+	// Get the dynamic config from the solver engine for hot-reload support.
+	// This is the SAME Arc used by the solver - admin API updates will propagate immediately.
+	let dynamic_config = solver.dynamic_config().clone();
+	// Get a snapshot for reading config values during setup
+	let config = solver.config().clone();
+
+	// Resolve which discovery implementation ingests orders submitted via /orders.
+	// Orders are submitted in-process; there is no HTTP forward.
+	let discovery_impl = api_config
+		.implementations
+		.discovery
+		.clone()
+		.filter(|name| solver.discovery().get(name).is_some());
+
+	if let Some(ref name) = discovery_impl {
+		tracing::info!("Orders will be submitted in-process to discovery implementation: {name}");
+	} else {
+		tracing::warn!("No offchain_eip7683 discovery source configured - /orders endpoint will not be available");
+	}
+
+	// Initialize JWT service if auth config exists (needed for admin endpoints even if orders auth is disabled)
+	let jwt_service = match &api_config.auth {
+		Some(auth_config) => match JwtService::new(auth_config.clone()) {
+			Ok(service) => {
+				if auth_config.orders_auth_enabled {
+					tracing::info!(
+						"API authentication enabled for orders with issuer: {}",
+						auth_config.issuer
+					);
+				} else {
+					tracing::info!("JWT service initialized for admin auth (orders auth disabled)");
+				}
+				Some(Arc::new(service))
+			},
+			Err(e) => {
+				tracing::error!("Failed to initialize JWT service: {}", e);
+				return Err(e.into());
+			},
+		},
+		None => {
+			tracing::info!("API authentication disabled");
+			None
+		},
+	};
+
+	// Initialize signature validation service
+	let signature_validation = Arc::new(SignatureValidationService::new());
+	let mut siwe_nonce_store: Option<Arc<NonceStore>> = None;
+
+	// Initialize admin API if enabled in config
+	let admin_state = if let Some(auth_config) = &api_config.auth {
+		if let Some(admin_config) = &auth_config.admin {
+			if admin_config.enabled {
+				let redis_url = std::env::var("REDIS_URL")
+					.unwrap_or_else(|_| "redis://localhost:6379".to_string());
+				let cluster_mode = solver_storage::parse_redis_cluster_mode_env();
+				let solver_id = config.solver.id.clone();
+				// Use explicit chain_id from admin config, or fall back to first network
+				let chain_id = admin_config
+					.chain_id
+					.unwrap_or_else(|| config.networks.keys().next().copied().unwrap_or(1));
+
+				match create_nonce_store_with_namespace(
+					StoreConfig::Redis {
+						url: redis_url.clone(),
+						cluster_mode,
+					},
+					&solver_id,
+					"siwe",
+					admin_config.nonce_ttl_seconds,
+				) {
+					Ok(store) => {
+						siwe_nonce_store = Some(Arc::new(store));
+						tracing::info!("SIWE nonce store initialized");
+					},
+					Err(e) => {
+						tracing::error!("Failed to initialize SIWE nonce store: {}", e);
+					},
+				}
+
+				// Use the solver's dynamic_config for hot reload (same Arc!)
+				// This ensures admin API updates propagate to the solver engine.
+
+				// Convert Config to OperatorConfig for persistence
+				let operator_config = match config_to_operator_config(&config) {
+					Ok(oc) => oc,
+					Err(e) => {
+						tracing::error!("Failed to convert config to OperatorConfig: {}", e);
+						return Err(Box::new(std::io::Error::new(
+							std::io::ErrorKind::InvalidData,
+							format!("Config conversion error: {e}"),
+						)));
+					},
+				};
+
+				// Share one storage backend for all admin Redis operations.
+				let admin_storage = create_admin_storage_backend(redis_url.clone(), cluster_mode)?;
+
+				// Create ConfigStore for OperatorConfig
+				let config_store = create_admin_config_store(admin_storage.clone(), &solver_id)?;
+
+				// Seed OperatorConfig if it doesn't exist
+				match config_store.exists().await {
+					Ok(false) => {
+						if let Err(e) = config_store.seed(operator_config).await {
+							tracing::error!("Failed to seed operator config: {}", e);
+							return Err(Box::new(std::io::Error::other(format!(
+								"Config seed error: {e}"
+							))));
+						}
+						tracing::info!("Seeded operator config for admin API persistence");
+					},
+					Ok(true) => {
+						tracing::info!("Operator config already exists, using existing");
+					},
+					Err(e) => {
+						tracing::error!("Failed to check operator config existence: {}", e);
+						return Err(Box::new(std::io::Error::other(format!(
+							"Config check error: {e}"
+						))));
+					},
+				}
+
+				// Create nonce store (concrete NonceStore type, not a trait)
+				match create_admin_nonce_store(
+					admin_storage,
+					&solver_id,
+					admin_config.nonce_ttl_seconds,
+				) {
+					Ok(nonce_store) => {
+						// Keep nonce_store as Arc for sharing with verifier and AdminApiState
+						let nonce_store: Arc<solver_storage::nonce_store::NonceStore> =
+							Arc::new(nonce_store);
+						let verifier = AdminActionVerifier::new(
+							nonce_store.clone(),
+							admin_config.clone(),
+							chain_id,
+							&solver_id,
+						);
+						tracing::info!(
+							"Admin API enabled for {} admin(s) with config persistence",
+							admin_config.admin_count()
+						);
+						Some(AdminApiState {
+							// Wrap verifier in RwLock for hot reload of admin list
+							verifier: Arc::new(RwLock::new(verifier)),
+							config_store,
+							dynamic_config: dynamic_config.clone(),
+							// Store nonce_store for rebuilding verifier later
+							nonce_store,
+							solver_id: solver_id.clone(),
+							// Token manager for hot-reloading token configurations
+							token_manager: solver.token_manager().clone(),
+							bridge_service: solver.bridge_service().cloned(),
+							solver_address: solver.solver_address_hex(),
+							delivery: solver.delivery().clone(),
+							rebalance_monitor_status: solver.rebalance_monitor_status().clone(),
+						})
+					},
+					Err(e) => {
+						tracing::error!("Failed to initialize admin nonce store: {}", e);
+						None
+					},
+				}
+			} else {
+				None
+			}
+		} else {
+			None
+		}
+	} else {
+		None
+	};
+
+	// Note: dynamic_config is already defined at function start from solver.dynamic_config()
+	// This ensures AppState and AdminApiState use the same Arc as the solver engine.
+
+	let app_state = AppState {
+		solver,
+		config: dynamic_config,
+		discovery_impl,
+		jwt_service: jwt_service.clone(),
+		siwe_nonce_store,
+		signature_validation,
+	};
+
+	// Build the router with /api/v1 base path and public API hardening.
+	let mut api_routes = build_public_api_routes(&api_config, jwt_service.as_ref());
+
+	// Add admin routes if enabled
+	if let Some(admin_state) = admin_state {
+		let rebalance_read_routes = axum::Router::new()
+			.route(
+				"/config",
+				axum::routing::get(crate::apis::rebalance::handle_get_rebalance_config),
+			)
+			.route(
+				"/status",
+				axum::routing::get(crate::apis::rebalance::handle_get_rebalance_status),
+			)
+			.route(
+				"/transfers",
+				axum::routing::get(crate::apis::rebalance::handle_get_rebalance_transfers),
+			);
+
+		let rebalance_write_routes = axum::Router::new()
+			.route(
+				"/config",
+				axum::routing::put(crate::apis::rebalance::handle_update_rebalance_config),
+			)
+			.route(
+				"/config/threshold",
+				axum::routing::put(crate::apis::rebalance::handle_update_rebalance_threshold),
+			)
+			.route(
+				"/trigger",
+				axum::routing::post(crate::apis::rebalance::handle_trigger_rebalance),
+			)
+			.route(
+				"/transfers/{id}/resolve",
+				axum::routing::post(crate::apis::rebalance::handle_resolve_transfer),
+			);
+
+		let mut admin_read_routes = Router::new()
+			.route("/config", get(handle_get_config))
+			.route("/balances", get(handle_get_balances))
+			.route("/nonce", get(handle_get_nonce))
+			.route("/types", get(handle_get_types))
+			.route("/whitelist", get(handle_get_whitelist))
+			.route("/fees", get(handle_get_fees))
+			.route("/gas", get(handle_get_gas))
+			.nest("/rebalance", rebalance_read_routes);
+
+		let mut admin_write_routes = Router::new()
+			.route("/nonce", post(handle_get_nonce))
+			.route(
+				"/whitelist",
+				post(handle_set_admin_role).delete(handle_remove_admin),
+			)
+			.route("/tokens/batch", post(handle_add_tokens))
+			.route("/tokens", post(handle_add_token))
+			.route("/tokens", delete(handle_remove_token))
+			.route("/tokens/approve", post(handle_approve_tokens))
+			.route("/withdrawals", post(handle_withdrawal))
+			.route("/fees", put(handle_update_fees))
+			.route("/gas", put(handle_update_gas))
+			.nest("/rebalance", rebalance_write_routes);
+
+		// Admin routes always require JWT authentication, regardless of order auth settings.
+		if let Some(jwt) = &jwt_service {
+			admin_read_routes = admin_read_routes.layer(middleware::from_fn_with_state(
+				AuthState {
+					jwt_service: jwt.clone(),
+					required_scope: solver_types::AuthScope::AdminRead,
+				},
+				auth_middleware,
+			));
+			admin_write_routes = admin_write_routes.layer(middleware::from_fn_with_state(
+				AuthState {
+					jwt_service: jwt.clone(),
+					required_scope: solver_types::AuthScope::AdminAll,
+				},
+				auth_middleware,
+			));
+		}
+
+		let admin_routes = admin_read_routes
+			.merge(admin_write_routes)
+			.with_state(admin_state);
+
+		api_routes = api_routes.nest("/admin", admin_routes);
+		tracing::info!("Admin routes registered at /api/v1/admin/*");
+	}
+
+	// Health check route at root level (no auth required)
+	let health_routes = Router::new()
+		.route("/health", get(handle_health))
+		.with_state(app_state.clone());
+
+	let app = Router::new()
+		.merge(health_routes) // Health endpoints at root level
+		.nest("/api/v1", api_routes)
+		.layer(ServiceBuilder::new().layer(CorsLayer::permissive()))
+		.with_state(app_state);
+
+	let bind_address = format!("{}:{}", api_config.host, api_config.port);
+	let listener = TcpListener::bind(&bind_address).await?;
+
+	tracing::info!("OIF Solver API server starting on {}", bind_address);
+
+	// Wrap the entire app with NormalizePath to handle trailing slashes
+	let app = NormalizePath::trim_trailing_slash(app);
+	let service =
+		ServiceExt::<axum::http::Request<axum::body::Body>>::into_make_service_with_connect_info::<
+			SocketAddr,
+		>(app);
+
+	axum::serve(listener, service).await?;
+
+	Ok(())
+}
+
+fn build_public_api_routes(
+	api_config: &ApiConfig,
+	jwt_service: Option<&Arc<JwtService>>,
+) -> Router<AppState> {
+	let mut quote_routes = Router::new().route("/quotes", post(handle_quote));
+	quote_routes = crate::api_hardening::apply_quote_concurrency(quote_routes, api_config);
+	let require_auth = api_config
+		.auth
+		.as_ref()
+		.map(|auth| auth.orders_auth_enabled)
+		.unwrap_or(false);
+
+	if require_auth {
+		if let Some(jwt) = jwt_service {
+			quote_routes = quote_routes.layer(middleware::from_fn_with_state(
+				AuthState {
+					jwt_service: jwt.clone(),
+					required_scope: solver_types::AuthScope::CreateQuotes,
+				},
+				auth_middleware,
+			));
+		}
+	}
+
+	let auth_routes = Router::new()
+		.route("/register", post(handle_auth_register))
+		.route("/refresh", post(handle_auth_refresh))
+		.route("/siwe/nonce", post(handle_auth_siwe_nonce))
+		.route("/siwe/verify", post(handle_auth_siwe_verify));
+
+	let mut order_routes = Router::new()
+		.route("/orders", post(handle_order))
+		.route("/orders/{id}", get(handle_get_order_by_id));
+
+	if require_auth {
+		if let Some(jwt) = jwt_service {
+			let order_post_route = Router::new().route("/orders", post(handle_order)).layer(
+				middleware::from_fn_with_state(
+					AuthState {
+						jwt_service: jwt.clone(),
+						required_scope: solver_types::AuthScope::CreateOrders,
+					},
+					auth_middleware,
+				),
+			);
+
+			let order_get_route = Router::new()
+				.route("/orders/{id}", get(handle_get_order_by_id))
+				.layer(middleware::from_fn_with_state(
+					AuthState {
+						jwt_service: jwt.clone(),
+						required_scope: solver_types::AuthScope::ReadOrders,
+					},
+					auth_middleware,
+				));
+
+			order_routes = order_post_route.merge(order_get_route);
+		}
+	}
+
+	let routes = Router::new()
+		.merge(quote_routes)
+		.route("/assets", get(handle_get_assets))
+		.route("/assets/{chain_id}", get(handle_get_assets_for_chain))
+		.nest("/auth", auth_routes)
+		.merge(order_routes)
+		.layer(DefaultBodyLimit::max(api_config.max_request_size));
+
+	crate::api_hardening::apply_rate_limit(routes, api_config)
+}
+
+/// Handles POST /api/v1/quotes requests.
+///
+/// This endpoint processes quote requests and returns price estimates
+/// for cross-chain intents following the ERC-7683 standard.
+async fn handle_quote(
+	State(state): State<AppState>,
+	Json(request): Json<GetQuoteRequest>,
+) -> Result<Json<GetQuoteResponse>, APIError> {
+	let config = state.config.read().await;
+	match crate::apis::quote::process_quote_request(request, &state.solver, &config).await {
+		Ok(response) => Ok(Json(response)),
+		Err(e) => {
+			tracing::warn!("Quote request failed: {}", e);
+			Err(APIError::from(e))
+		},
+	}
+}
+
+/// Handles GET /api/v1/orders/{id} requests.
+///
+/// This endpoint retrieves order details by ID, providing status information
+/// and execution details for cross-chain intent orders.
+async fn handle_get_order_by_id(
+	Path(id): Path<String>,
+	State(state): State<AppState>,
+	claims: Option<Extension<solver_types::JwtClaims>>,
+) -> Result<Json<GetOrderResponse>, APIError> {
+	// Log authenticated access if JWT claims are present
+	if let Some(Extension(claims)) = &claims {
+		tracing::info!(
+			client_id = %claims.sub,
+			order_id = %id,
+			"Authenticated order retrieval"
+		);
+	}
+	match get_order_by_id(Path(id), &state.solver, claims).await {
+		Ok(response) => Ok(Json(response)),
+		Err(e) => {
+			tracing::warn!("Order retrieval failed: {}", e);
+			Err(APIError::from(e))
+		},
+	}
+}
+
+/// Handles GET /api/v1/assets requests.
+///
+/// Returns all supported assets across all configured networks.
+async fn handle_get_assets(
+	State(state): State<AppState>,
+) -> Json<crate::apis::tokens::TokensResponse> {
+	// Use shared config to support hot reload from admin API
+	crate::apis::tokens::get_assets_from_config(State(state.config)).await
+}
+
+/// Handles GET /api/v1/assets/{chain_id} requests.
+///
+/// Returns supported assets for a specific chain.
+async fn handle_get_assets_for_chain(
+	Path(chain_id): Path<u64>,
+	State(state): State<AppState>,
+) -> Result<Json<crate::apis::tokens::NetworkTokens>, StatusCode> {
+	// Use shared config to support hot reload from admin API
+	crate::apis::tokens::get_assets_for_chain_from_config(
+		Path(chain_id),
+		State(state.config.clone()),
+	)
+	.await
+}
+
+/// Handles POST /api/v1/auth/register requests.
+///
+/// Auth endpoint that provides both access and refresh tokens.
+async fn handle_auth_register(
+	State(state): State<AppState>,
+	Json(payload): Json<crate::apis::auth::RegisterRequest>,
+) -> impl IntoResponse {
+	crate::apis::auth::register_client(State(state.jwt_service), Json(payload)).await
+}
+
+/// Handles POST /api/v1/auth/refresh requests.
+///
+/// Endpoint exchanges refresh tokens for new access and refresh tokens.
+async fn handle_auth_refresh(
+	State(state): State<AppState>,
+	Json(payload): Json<crate::apis::auth::RefreshRequest>,
+) -> impl IntoResponse {
+	crate::apis::auth::refresh_token(State(state.jwt_service), Json(payload)).await
+}
+
+/// Handles POST /api/v1/auth/siwe/nonce requests.
+///
+/// Generates a SIWE nonce and canonical SIWE message for admin login.
+async fn handle_auth_siwe_nonce(
+	State(state): State<AppState>,
+	Json(payload): Json<crate::apis::auth::SiweNonceRequest>,
+) -> impl IntoResponse {
+	let siwe_state = crate::apis::auth::SiweAuthState {
+		jwt_service: state.jwt_service,
+		config: state.config,
+		siwe_nonce_store: state.siwe_nonce_store,
+	};
+
+	crate::apis::auth::issue_siwe_nonce(State(siwe_state), Json(payload)).await
+}
+
+/// Handles POST /api/v1/auth/siwe/verify requests.
+///
+/// Verifies SIWE signatures and returns admin-scoped JWT access + refresh tokens.
+async fn handle_auth_siwe_verify(
+	State(state): State<AppState>,
+	Json(payload): Json<crate::apis::auth::SiweVerifyRequest>,
+) -> impl IntoResponse {
+	let siwe_state = crate::apis::auth::SiweAuthState {
+		jwt_service: state.jwt_service,
+		config: state.config,
+		siwe_nonce_store: state.siwe_nonce_store,
+	};
+
+	crate::apis::auth::verify_siwe_token(State(siwe_state), Json(payload)).await
+}
+
+/// Handles POST /api/v1/orders requests.
+///
+/// This endpoint processes both quote acceptances and direct order submissions
+/// through a unified validation pipeline before forwarding to the discovery service.
+async fn handle_order(
+	State(state): State<AppState>,
+	claims: Option<Extension<solver_types::JwtClaims>>,
+	Json(payload): Json<Value>,
+) -> axum::response::Response {
+	// Log authenticated access if JWT claims are present
+	if let Some(Extension(claims)) = &claims {
+		tracing::info!(
+			client_id = %claims.sub,
+			"Authenticated order submission"
+		);
+	}
+
+	{
+		let config = state.config.read().await;
+		if let Err(api_error) =
+			crate::validators::intake::ensure_intake_enabled::<APIError>(&config)
+		{
+			return api_error.into_response();
+		}
+	}
+
+	// Extract standard, default to eip7683
+	let standard = "eip7683";
+
+	// Convert payload to PostOrderRequest
+	let intent_request = match extract_intent_request(payload.clone(), &state, standard).await {
+		Ok(intent) => intent,
+		Err(api_error) => return api_error.into_response(),
+	};
+
+	// Validate the PostOrderRequest. LOAD-BEARING: this runs sponsor-signature,
+	// allocator-authorization, and capacity checks BEFORE submit_order_to_discovery,
+	// which is a trusted enqueue primitive that does not re-validate. Removing this
+	// reopens C-02/C-04.
+	match validate_intent_request(&intent_request, &state, standard).await {
+		Ok(order) => order,
+		Err(api_error) => return api_error.into_response(),
+	};
+
+	submit_order_to_discovery(&state, &intent_request).await
+}
+
+/// Extracts a PostOrderRequest from the incoming payload.
+/// Handles both quote acceptances (with quoteId) and direct submissions.
+/// Also performs early sponsor recovery for Permit2 orders that require ecrecover.
+async fn extract_intent_request(
+	payload: Value,
+	state: &AppState,
+	standard: &str,
+) -> Result<PostOrderRequest, APIError> {
+	// Check if this is a quote acceptance (has quoteId)
+	let intent = if payload.get("quoteId").and_then(|v| v.as_str()).is_some() {
+		// Quote acceptance path
+		create_intent_from_quote(payload, state, standard).await?
+	} else {
+		// Direct submission path
+		create_intent_from_payload(payload)?
+	};
+
+	// Recover the sponsor early so malformed Permit2 signatures fail fast before
+	// the order reaches downstream validation and discovery.
+	if intent.order.requires_ecrecover() {
+		intent
+			.order
+			.extract_sponsor(Some(&intent.signature))
+			.map_err(|e| APIError::BadRequest {
+				error_type: ApiErrorType::OrderValidationFailed,
+				message: format!("Failed to extract sponsor: {e}"),
+				details: None,
+			})?;
+	}
+
+	Ok(intent)
+}
+
+/// Creates a PostOrderRequest from a quote acceptance.
+async fn create_intent_from_quote(
+	payload: Value,
+	state: &AppState,
+	standard: &str,
+) -> Result<PostOrderRequest, APIError> {
+	// Extract required fields
+	let quote_id = payload
+		.get("quoteId")
+		.and_then(|v| v.as_str())
+		.ok_or_else(|| APIError::BadRequest {
+			error_type: ApiErrorType::MissingSignature,
+			message: "Missing quoteId in request".to_string(),
+			details: None,
+		})?;
+
+	let signature = payload
+		.get("signature")
+		.and_then(|v| v.as_str())
+		.ok_or_else(|| APIError::BadRequest {
+			error_type: ApiErrorType::MissingSignature,
+			message: "Missing signature for quote acceptance".to_string(),
+			details: None,
+		})?;
+
+	tracing::info!(
+		"Quote acceptance for quote_id: {}, standard: {}",
+		quote_id,
+		standard
+	);
+
+	// Retrieve the quote from storage
+	let quote = crate::apis::quote::get_quote_by_id(quote_id, &state.solver)
+		.await
+		.map_err(|e| {
+			tracing::warn!("Failed to retrieve quote {}: {}", quote_id, e);
+			APIError::BadRequest {
+				error_type: ApiErrorType::QuoteNotFound,
+				message: format!("Quote not found: {e}"),
+				details: Some(serde_json::json!({"quoteId": quote_id})),
+			}
+		})?;
+
+	// Convert Quote to PostOrderRequest using the TryFrom implementation
+	(&quote, signature, standard)
+		.try_into()
+		.map_err(|e| APIError::InternalServerError {
+			error_type: ApiErrorType::QuoteConversionFailed,
+			message: format!("Failed to convert quote to intent format: {e}"),
+		})
+}
+
+/// Creates a PostOrderRequest from a direct payload submission.
+fn create_intent_from_payload(payload: Value) -> Result<PostOrderRequest, APIError> {
+	// The payload should already be in PostOrderRequest format
+	// {order: Bytes, sponsor: Address, signature: Bytes, lock_type: LockType}
+	serde_json::from_value::<PostOrderRequest>(payload).map_err(|e| APIError::BadRequest {
+		error_type: ApiErrorType::InvalidRequest,
+		message: format!("Invalid intent request format: {e}"),
+		details: None,
+	})
+}
+
+/// Validates a PostOrderRequest and creates an Order.
+async fn validate_intent_request(
+	intent: &PostOrderRequest,
+	state: &AppState,
+	standard: &str,
+) -> Result<Order, APIError> {
+	use alloy_sol_types::SolType;
+
+	// Get lock_type from the order
+	let lock_type = intent.order.get_lock_type();
+	let lock_type_str = lock_type.as_str();
+
+	{
+		let config = state.config.read().await;
+		if matches!(lock_type, LockType::ResourceLock) && !config.solver.is_resource_lock_enabled()
+		{
+			return Err(APIError::BadRequest {
+				error_type: ApiErrorType::OrderValidationFailed,
+				message: "ResourceLock orders are disabled by this solver configuration"
+					.to_string(),
+				details: None,
+			});
+		}
+	}
+
+	// Convert to StandardOrder and encode
+	let standard_order =
+		StandardOrder::try_from(&intent.order).map_err(|e| APIError::BadRequest {
+			error_type: ApiErrorType::OrderValidationFailed,
+			message: format!("Failed to convert order to standard format: {e}"),
+			details: None,
+		})?;
+
+	// EIP-712 signature validation for ResourceLock orders
+	let requires_validation = state
+		.signature_validation
+		.requires_signature_validation(standard, &lock_type);
+
+	if requires_validation {
+		let config = state.config.read().await;
+		state
+			.signature_validation
+			.validate_signature(standard, intent, &config, state.solver.delivery())
+			.await?;
+	}
+
+	{
+		// Fast intake rejection: confirm the user can fund the order (wallet
+		// balance for escrow flows, or TheCompact deposit balance for resource
+		// locks) before forwarding to discovery. The authoritative in-flight
+		// reservation against the Compact deposit is taken later, at the engine
+		// acceptance boundary in `IntentHandler::handle`, so it covers every
+		// intake path — not just HTTP /orders.
+		let config = state.config.read().await;
+		ensure_user_capacity_for_order(state.solver.as_ref(), &config, lock_type, &standard_order)
+			.await?;
+	}
+
+	let order_bytes = alloy_primitives::Bytes::from(StandardOrder::abi_encode(&standard_order));
+
+	// Get solver address from primary account
+	let solver_address =
+		state
+			.solver
+			.account()
+			.get_address()
+			.await
+			.map_err(|e| APIError::InternalServerError {
+				error_type: ApiErrorType::SolverAddressError,
+				message: format!("Failed to get solver address: {e}"),
+			})?;
+
+	// Create callback that captures DeliveryService
+	let delivery = state.solver.delivery().clone();
+	let compute_order_id: OrderIdCallback = Box::new(move |chain_id, tx_data| {
+		let delivery = delivery.clone();
+		Box::pin(async move {
+			// Extract settler address and calldata from tx_data
+			if tx_data.len() < 20 {
+				return Err("Invalid transaction data: too short".to_string());
+			}
+
+			let settler_address = Address(tx_data[0..20].to_vec());
+			let calldata = &tx_data[20..];
+
+			let tx = Transaction {
+				to: Some(settler_address),
+				data: calldata.to_vec(),
+				value: U256::ZERO,
+				gas_limit: None, // Will be estimated
+				gas_price: None, // Will be set by delivery
+				max_fee_per_gas: None,
+				max_priority_fee_per_gas: None,
+				nonce: None, // Will be set by delivery
+				chain_id,
+			};
+
+			// Execute via DeliveryService
+			delivery
+				.contract_call(chain_id, tx)
+				.await
+				.map(|bytes| bytes.to_vec())
+				.map_err(|e| format!("Contract call failed: {e}"))
+		})
+	});
+
+	// Process the order through the OrderService
+	// This validates the order based on the standard and returns a validated Order
+	let result = state
+		.solver
+		.order()
+		.validate_and_create_order(
+			standard,
+			&order_bytes,
+			&None,
+			lock_type_str,
+			compute_order_id,
+			&solver_address,
+			None, // No quote_id for direct order submissions
+		)
+		.await
+		.map_err(|e| {
+			tracing::error!("Order validation failed with error: {}", e);
+			APIError::BadRequest {
+				error_type: ApiErrorType::OrderValidationFailed,
+				message: format!("Order validation failed: {e}"),
+				details: None,
+			}
+		});
+
+	match &result {
+		Ok(_) => tracing::debug!("Order validation completed successfully"),
+		Err(e) => tracing::error!("Order validation failed: {:?}", e),
+	}
+
+	let order = result?;
+
+	Ok(order)
+}
+
+/// Submits a validated order to the configured discovery implementation, in-process.
+///
+/// Callers MUST run `validate_intent_request` first — `submit_order` is a trusted
+/// enqueue primitive that does not re-validate (see its trait doc).
+async fn submit_order_to_discovery(
+	state: &AppState,
+	intent: &PostOrderRequest,
+) -> axum::response::Response {
+	use solver_discovery::IntentSubmissionError;
+	use solver_types::{PostOrderResponse, PostOrderResponseStatus};
+
+	let implementation = match &state.discovery_impl {
+		Some(name) => name,
+		None => {
+			tracing::warn!("offchain_eip7683 discovery source not configured");
+			let response = PostOrderResponse {
+				order_id: None,
+				status: PostOrderResponseStatus::Error,
+				message: Some("Intent submission service not configured".to_string()),
+				order: None,
+			};
+			return (StatusCode::SERVICE_UNAVAILABLE, Json(response)).into_response();
+		},
+	};
+
+	match state
+		.solver
+		.discovery()
+		.submit_order(implementation, intent)
+		.await
+	{
+		Ok(submission) => (
+			StatusCode::OK,
+			Json(PostOrderResponse {
+				order_id: Some(submission.order_id),
+				status: PostOrderResponseStatus::Received,
+				message: Some(submission.message),
+				order: submission.order,
+			}),
+		)
+			.into_response(),
+		Err(IntentSubmissionError::Rejected { message, order }) => (
+			StatusCode::BAD_REQUEST,
+			Json(PostOrderResponse {
+				order_id: None,
+				status: PostOrderResponseStatus::Rejected,
+				message: Some(message),
+				order,
+			}),
+		)
+			.into_response(),
+		Err(IntentSubmissionError::Unavailable {
+			message,
+			order_id,
+			order,
+		}) => (
+			StatusCode::SERVICE_UNAVAILABLE,
+			Json(PostOrderResponse {
+				order_id,
+				status: PostOrderResponseStatus::Error,
+				message: Some(message),
+				order,
+			}),
+		)
+			.into_response(),
+		Err(IntentSubmissionError::NotSupported) => (
+			StatusCode::SERVICE_UNAVAILABLE,
+			Json(PostOrderResponse {
+				order_id: None,
+				status: PostOrderResponseStatus::Error,
+				message: Some("Intent submission service not configured".to_string()),
+				order: None,
+			}),
+		)
+			.into_response(),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::eip712::MessageHashComputer;
+	use alloy_primitives::{hex, keccak256, Address as AlloyAddress, Bytes, FixedBytes, U256};
+	use alloy_sol_types::{SolCall, SolType};
+	use axum::body::{self, Body};
+	use axum::http::{Request, StatusCode};
+	use secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
+	use serde_json::{json, to_value};
+	use solver_account::AccountService;
+	use solver_config::{Config, ConfigBuilder, RateLimitConfig};
+	use solver_core::engine::event_bus::EventBus;
+	use solver_core::engine::token_manager::TokenManager;
+	use solver_delivery::{
+		DeliveryError, DeliveryInterface, DeliveryService, MockDeliveryInterface,
+	};
+	use solver_discovery::DiscoveryService;
+	use solver_order::OrderService;
+	use solver_pricing::implementations::mock::create_mock_pricing;
+	use solver_pricing::PricingService;
+	use solver_settlement::SettlementService;
+	use solver_storage::implementations::memory::MemoryStorage;
+	use solver_storage::{create_storage_backend, StorageService, StoreConfig};
+	use solver_types::api::{
+		OifOrder, OrderPayload, PostOrderRequest, PostOrderResponse, PostOrderResponseStatus,
+		SignatureType,
+	};
+	use solver_types::networks::RpcEndpoint;
+	use solver_types::standards::eip7683::interfaces::ITheCompact::DOMAIN_SEPARATORCall;
+	use solver_types::standards::eip7683::interfaces::{
+		IAllocator, ITheCompact, SolMandateOutput, StandardOrder as OifStandardOrder,
+	};
+	use solver_types::utils::tests::builders::{NetworkConfigBuilder, NetworksConfigBuilder};
+	use solver_types::{
+		APIError, Address, ApiErrorType, AuthConfig, AuthScope, ErrorResponse, SecretString,
+	};
+	use std::collections::HashMap;
+	use std::convert::TryFrom;
+	use std::net::{IpAddr, Ipv4Addr};
+	use std::sync::Arc;
+	use std::time::Duration;
+	use tower::ServiceExt;
+
+	fn empty_discovery() -> Arc<DiscoveryService> {
+		Arc::new(DiscoveryService::new(HashMap::new()))
+	}
+
+	async fn build_test_solver_engine() -> Arc<SolverEngine> {
+		build_test_solver_engine_with_allocator_authorized(true, empty_discovery()).await
+	}
+
+	async fn build_test_solver_engine_with_allocator_authorized(
+		allocator_authorized: bool,
+		discovery: Arc<DiscoveryService>,
+	) -> Arc<SolverEngine> {
+		let config: Config = serde_json::from_value(json!({
+			"solver": {
+				"id": "test-solver",
+				"monitoring_timeout_seconds": 30,
+				"min_profitability_pct": 1.0,
+				"resource_lock_enabled": true
+			},
+			"storage": {
+				"primary": "memory",
+				"cleanup_interval_seconds": 60,
+				"implementations": {
+					"memory": {}
+				}
+			},
+			"delivery": {
+				"min_confirmations": 1,
+				"implementations": {}
+			},
+			"account": {
+				"primary": "local",
+				"implementations": {
+					"local": {
+						"private_key": "0x1234567890123456789012345678901234567890123456789012345678901234"
+					}
+				}
+			},
+			"discovery": {
+				"implementations": {}
+			},
+			"order": {
+				"implementations": {},
+				"strategy": {
+					"primary": "simple",
+					"implementations": {
+						"simple": {}
+					}
+				}
+			},
+			"settlement": {
+				"implementations": {}
+			},
+			"networks": {
+				"1": {
+					"chain_id": 1,
+					"input_settler_address": "0x0000000000000000000000000000000000000011",
+					"input_settler_compact_address": "0x9999999999999999999999999999999999999999",
+					"output_settler_address": "0x0000000000000000000000000000000000000022",
+					"the_compact_address": "0x8888888888888888888888888888888888888888",
+					"allocator_address": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+					"rpc_urls": [
+						{ "http": "http://localhost:8545" }
+					],
+					"tokens": [
+						{
+							"symbol": "TEST",
+							"address": "0x0000000000000000000000000000000000000033",
+							"decimals": 18
+						}
+					]
+				}
+			}
+		}))
+		.expect("failed to parse test config");
+
+		let storage = Arc::new(StorageService::new(Box::new(MemoryStorage::new())));
+
+		let account_config: serde_json::Value = json!({
+			"private_key": "0x1234567890123456789012345678901234567890123456789012345678901234"
+		});
+		let account_impl = solver_account::implementations::local::create_account(&account_config)
+			.await
+			.expect("failed to create account impl");
+		let account = Arc::new(AccountService::new(account_impl));
+
+		let solver_address = Address(vec![0x11; 20]);
+
+		let mut mock_delivery = MockDeliveryInterface::new();
+		mock_delivery.expect_eth_call().returning(move |tx| {
+			let selector = tx.data.get(0..4).map(|s| [s[0], s[1], s[2], s[3]]);
+			let response = match selector {
+				Some(s) if s == ITheCompact::getLockDetailsCall::SELECTOR => {
+					encode_lock_details(AlloyAddress::from([0xA1u8; 20]))
+				},
+				Some(s) if s == IAllocator::isClaimAuthorizedCall::SELECTOR => {
+					encode_bool(allocator_authorized)
+				},
+				_ => Bytes::from(FixedBytes::from([0x99u8; 32]).to_vec()),
+			};
+			Box::pin(async move { Ok(response) })
+		});
+		let mut delivery_implementations: HashMap<u64, Arc<dyn DeliveryInterface>> = HashMap::new();
+		delivery_implementations.insert(1, Arc::new(mock_delivery) as Arc<dyn DeliveryInterface>);
+		let delivery = Arc::new(DeliveryService::new(delivery_implementations, 1, 10, 60));
+
+		let strategy_config = serde_json::Value::Object(serde_json::Map::new());
+		let strategy =
+			solver_order::implementations::strategies::simple::create_strategy(&strategy_config)
+				.expect("failed to create order strategy");
+		let order = Arc::new(OrderService::new(HashMap::new(), strategy));
+
+		let settlement = Arc::new(SettlementService::new(HashMap::new(), String::new(), 10));
+
+		let pricing_impl = create_mock_pricing(&serde_json::Value::Object(serde_json::Map::new()))
+			.expect("failed to create mock pricing");
+		let pricing = Arc::new(PricingService::new(pricing_impl, Vec::new()));
+
+		let event_bus = EventBus::new(10);
+
+		let token_manager = Arc::new(TokenManager::new(
+			HashMap::new(),
+			delivery.clone(),
+			account.clone(),
+		));
+
+		let dynamic_config = Arc::new(RwLock::new(config.clone()));
+		let engine = SolverEngine::new(
+			dynamic_config,
+			config.clone(),
+			storage,
+			account,
+			solver_address,
+			delivery,
+			discovery,
+			order,
+			settlement,
+			pricing,
+			event_bus,
+			token_manager,
+			None,
+		);
+
+		Arc::new(engine)
+	}
+
+	async fn build_test_solver_engine_with_delivery(
+		config: Config,
+		delivery_implementations: HashMap<u64, Arc<dyn DeliveryInterface>>,
+		discovery: Arc<DiscoveryService>,
+	) -> Arc<SolverEngine> {
+		let storage = Arc::new(StorageService::new(Box::new(MemoryStorage::new())));
+
+		let account_config: serde_json::Value = json!({
+			"private_key": "0x1234567890123456789012345678901234567890123456789012345678901234"
+		});
+		let account_impl = solver_account::implementations::local::create_account(&account_config)
+			.await
+			.expect("failed to create account impl");
+		let account = Arc::new(AccountService::new(account_impl));
+
+		let solver_address = Address(vec![0x11; 20]);
+
+		let delivery = Arc::new(DeliveryService::new(delivery_implementations, 1, 10, 60));
+
+		let strategy_config = serde_json::Value::Object(serde_json::Map::new());
+		let strategy =
+			solver_order::implementations::strategies::simple::create_strategy(&strategy_config)
+				.expect("failed to create order strategy");
+		let order = Arc::new(OrderService::new(HashMap::new(), strategy));
+
+		let settlement = Arc::new(SettlementService::new(HashMap::new(), String::new(), 10));
+
+		let pricing_impl = create_mock_pricing(&serde_json::Value::Object(serde_json::Map::new()))
+			.expect("failed to create mock pricing");
+		let pricing = Arc::new(PricingService::new(pricing_impl, Vec::new()));
+
+		let event_bus = EventBus::new(10);
+
+		let token_manager = Arc::new(TokenManager::new(
+			HashMap::new(),
+			delivery.clone(),
+			account.clone(),
+		));
+
+		let dynamic_config = Arc::new(RwLock::new(config.clone()));
+		let engine = SolverEngine::new(
+			dynamic_config,
+			config.clone(),
+			storage,
+			account,
+			solver_address,
+			delivery,
+			discovery,
+			order,
+			settlement,
+			pricing,
+			event_bus,
+			token_manager,
+			None,
+		);
+
+		Arc::new(engine)
+	}
+
+	fn resource_lock_config_for_signature_order() -> Config {
+		let network = NetworkConfigBuilder::new()
+			.input_settler_address_hex("0x0000000000000000000000000000000000000011")
+			.unwrap()
+			.output_settler_address_hex("0x0000000000000000000000000000000000000022")
+			.unwrap()
+			.input_settler_compact_address_hex("0x9999999999999999999999999999999999999999")
+			.unwrap()
+			.the_compact_address_hex("0x8888888888888888888888888888888888888888")
+			.unwrap()
+			.add_rpc_endpoint(RpcEndpoint::http_only("http://localhost:8545".to_string()))
+			.build();
+		let networks = NetworksConfigBuilder::new().add_network(1, network).build();
+		let mut config = ConfigBuilder::new().networks(networks).build();
+		config.solver.resource_lock_enabled = true;
+		config
+	}
+
+	fn invalid_resource_lock_request() -> PostOrderRequest {
+		let output_chain_id = 137u64;
+		let output_amount = U256::from(500u64);
+		let input_amount = U256::from(1_000u64);
+		let token_id = {
+			let mut bytes = [0u8; 32];
+			bytes[..12].copy_from_slice(&[0xAA; 12]);
+			bytes[12..].copy_from_slice(&[0x33; 20]);
+			U256::from_be_bytes(bytes)
+		};
+		let payload = OrderPayload {
+			signature_type: SignatureType::Eip712,
+			domain: json!({
+				"name": "BatchCompact",
+				"version": "1",
+				"chainId": "1",
+				"verifyingContract": "0x8888888888888888888888888888888888888888",
+			}),
+			primary_type: "BatchCompact".to_string(),
+			message: json!({
+				"sponsor": "0x1111111111111111111111111111111111111111",
+				"nonce": "1",
+				"expires": "4102444800",
+				"mandate": {
+					"fillDeadline": "4102444700",
+					"inputOracle": "0x2222222222222222222222222222222222222222",
+					"outputs": [{
+						"oracle": "0x0000000000000000000000000000000000000000000000000000000000000066",
+						"settler": "0x0000000000000000000000000000000000000000000000000000000000000077",
+						"chainId": output_chain_id.to_string(),
+						"token": "0x0000000000000000000000000000000000000000000000000000000000000044",
+						"amount": output_amount.to_string(),
+						"recipient": "0x0000000000000000000000000000000000000000000000000000000000000055",
+						"callbackData": "0x",
+						"context": "0x"
+					}]
+				},
+				"commitments": [{
+					"lockTag": "0xaaaaaaaaaaaaaaaaaaaaaaaa",
+					"token": "0x3333333333333333333333333333333333333333",
+					"amount": input_amount.to_string(),
+					"id": token_id.to_string()
+				}]
+			}),
+			types: None,
+		};
+
+		PostOrderRequest {
+			order: OifOrder::OifResourceLockV0 { payload },
+			signature: Bytes::from(vec![0u8; 65]),
+			quote_id: None,
+			origin_submission: None,
+		}
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn validate_intent_rejects_resource_lock_when_disabled_before_rpc() {
+		let config = ConfigBuilder::new().build();
+		let mut mock_delivery = MockDeliveryInterface::new();
+		mock_delivery.expect_eth_call().times(0);
+		let mut delivery_impls: HashMap<u64, Arc<dyn DeliveryInterface>> = HashMap::new();
+		delivery_impls.insert(1, Arc::new(mock_delivery) as Arc<dyn DeliveryInterface>);
+		let solver = build_test_solver_engine_with_delivery(
+			config.clone(),
+			delivery_impls,
+			empty_discovery(),
+		)
+		.await;
+		let state = AppState {
+			solver,
+			config: Arc::new(RwLock::new(config)),
+			discovery_impl: None,
+			jwt_service: None,
+			siwe_nonce_store: None,
+			signature_validation: Arc::new(SignatureValidationService::new()),
+		};
+		let intent = invalid_resource_lock_request();
+
+		let error = super::validate_intent_request(&intent, &state, "eip7683")
+			.await
+			.expect_err("resource lock should be rejected when disabled");
+
+		match error {
+			APIError::BadRequest {
+				error_type,
+				message,
+				..
+			} => {
+				assert_eq!(error_type, ApiErrorType::OrderValidationFailed);
+				assert!(message.contains("ResourceLock orders are disabled"));
+			},
+			other => panic!("unexpected error: {other:?}"),
+		}
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn validate_intent_rejects_invalid_resource_lock_signature_before_capacity_rpc() {
+		let config = resource_lock_config_for_signature_order();
+		let domain_separator = Bytes::from([0x99u8; 32].to_vec());
+		let mut mock_delivery = MockDeliveryInterface::new();
+		mock_delivery.expect_eth_call().returning(move |tx| {
+			let domain_separator = domain_separator.clone();
+			Box::pin(async move {
+				if tx.data.starts_with(&DOMAIN_SEPARATORCall::SELECTOR) {
+					Ok(domain_separator)
+				} else {
+					Err(DeliveryError::Network(
+						"capacity check reached before signature validation".to_string(),
+					))
+				}
+			})
+		});
+		let mut delivery_impls: HashMap<u64, Arc<dyn DeliveryInterface>> = HashMap::new();
+		delivery_impls.insert(1, Arc::new(mock_delivery) as Arc<dyn DeliveryInterface>);
+		let solver = build_test_solver_engine_with_delivery(
+			config.clone(),
+			delivery_impls,
+			empty_discovery(),
+		)
+		.await;
+		let state = AppState {
+			solver,
+			config: Arc::new(RwLock::new(config)),
+			discovery_impl: None,
+			jwt_service: None,
+			siwe_nonce_store: None,
+			signature_validation: Arc::new(SignatureValidationService::new()),
+		};
+		let intent = invalid_resource_lock_request();
+
+		let error = super::validate_intent_request(&intent, &state, "eip7683")
+			.await
+			.expect_err("invalid signature should reject the order");
+
+		match error {
+			APIError::BadRequest { message, .. } => {
+				assert!(
+					message.to_ascii_lowercase().contains("signature")
+						|| message.contains("Failed to recover public key"),
+					"expected signature validation error, got: {message}"
+				);
+				assert!(
+					!message.contains("capacity check reached"),
+					"capacity RPC should not run before signature validation"
+				);
+			},
+			other => panic!("unexpected error: {other:?}"),
+		}
+	}
+
+	fn encode_lock_details(allocator: AlloyAddress) -> Bytes {
+		let mut out = vec![0u8; 160];
+		out[44..64].copy_from_slice(allocator.as_slice());
+		out[95] = 5; // resetPeriod = OneDay (86_400s), exceeds the test fill-to-claim window
+		Bytes::from(out)
+	}
+
+	fn encode_bool(value: bool) -> Bytes {
+		let mut out = vec![0u8; 32];
+		if value {
+			out[31] = 1;
+		}
+		Bytes::from(out)
+	}
+
+	async fn build_test_app_state(discovery_impl: Option<String>) -> AppState {
+		let solver = build_test_solver_engine().await;
+		build_test_app_state_with_solver(discovery_impl, solver).await
+	}
+
+	async fn build_test_app_state_with_allocator_authorized(
+		discovery_impl: Option<String>,
+		allocator_authorized: bool,
+		discovery: Arc<DiscoveryService>,
+	) -> AppState {
+		let solver =
+			build_test_solver_engine_with_allocator_authorized(allocator_authorized, discovery)
+				.await;
+		build_test_app_state_with_solver(discovery_impl, solver).await
+	}
+
+	/// Builds an AppState whose engine holds the given discovery service, with
+	/// `discovery_impl` naming which implementation `/orders` submits to.
+	async fn build_test_app_state_with_discovery(
+		discovery_impl: Option<String>,
+		discovery: Arc<DiscoveryService>,
+	) -> AppState {
+		let solver = build_test_solver_engine_with_allocator_authorized(true, discovery).await;
+		build_test_app_state_with_solver(discovery_impl, solver).await
+	}
+
+	async fn build_test_app_state_with_solver(
+		discovery_impl: Option<String>,
+		solver: Arc<SolverEngine>,
+	) -> AppState {
+		let config = solver.config().clone();
+		let dynamic_config = Arc::new(RwLock::new(config));
+
+		AppState {
+			solver,
+			config: dynamic_config,
+			discovery_impl,
+			jwt_service: None,
+			siwe_nonce_store: None,
+			signature_validation: Arc::new(SignatureValidationService::new()),
+		}
+	}
+
+	/// A `DiscoveryInterface` stub for /orders tests: counts submit_order calls
+	/// and either accepts (returning `accept_order_id`) or reports NotSupported.
+	struct StubDiscovery {
+		calls: Arc<std::sync::atomic::AtomicUsize>,
+		accept_order_id: Option<String>,
+	}
+
+	#[async_trait::async_trait]
+	impl solver_discovery::DiscoveryInterface for StubDiscovery {
+		fn config_schema(&self) -> Box<dyn solver_types::ConfigSchema> {
+			unimplemented!("not exercised by these tests")
+		}
+		async fn start_monitoring(
+			&self,
+			_sender: tokio::sync::mpsc::Sender<solver_types::Intent>,
+		) -> Result<(), solver_discovery::DiscoveryError> {
+			Ok(())
+		}
+		async fn stop_monitoring(&self) -> Result<(), solver_discovery::DiscoveryError> {
+			Ok(())
+		}
+		async fn submit_order(
+			&self,
+			_request: &PostOrderRequest,
+		) -> Result<solver_discovery::IntentSubmission, solver_discovery::IntentSubmissionError> {
+			self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+			match &self.accept_order_id {
+				Some(id) => Ok(solver_discovery::IntentSubmission {
+					order_id: id.clone(),
+					order: None,
+					message: "ok".to_string(),
+				}),
+				None => Err(solver_discovery::IntentSubmissionError::NotSupported),
+			}
+		}
+	}
+
+	fn stub_discovery_service(stub: StubDiscovery) -> Arc<DiscoveryService> {
+		let mut impls: HashMap<String, Box<dyn solver_discovery::DiscoveryInterface>> =
+			HashMap::new();
+		impls.insert("offchain_eip7683".to_string(), Box::new(stub));
+		Arc::new(DiscoveryService::new(impls))
+	}
+
+	fn test_auth_config() -> AuthConfig {
+		AuthConfig {
+			orders_auth_enabled: true,
+			jwt_secret: SecretString::from("test-secret-key-at-least-32-chars"),
+			access_token_expiry_hours: 1,
+			refresh_token_expiry_hours: 720,
+			issuer: "test".to_string(),
+			public_register_enabled: false,
+			admin: None,
+		}
+	}
+
+	fn test_api_config() -> ApiConfig {
+		ApiConfig {
+			enabled: true,
+			host: "127.0.0.1".to_string(),
+			port: 0,
+			timeout_seconds: 30,
+			max_request_size: 1024 * 1024,
+			implementations: Default::default(),
+			rate_limiting: None,
+			cors: None,
+			auth: None,
+			quote: None,
+		}
+	}
+
+	async fn test_quote_app(api_config: ApiConfig, jwt_service: Option<Arc<JwtService>>) -> Router {
+		let state = build_test_app_state(None).await;
+		build_public_api_routes(&api_config, jwt_service.as_ref()).with_state(state)
+	}
+
+	async fn build_intake_disabled_test_app_state(discovery_impl: Option<String>) -> AppState {
+		let state = build_test_app_state(discovery_impl).await;
+		state.config.write().await.solver.ingress_mode =
+			solver_config::SolverIngressMode::IntakeDisabled;
+		state
+	}
+
+	fn sample_post_order_request() -> PostOrderRequest {
+		let payload = OrderPayload {
+			signature_type: SignatureType::Eip712,
+			domain: json!({
+				"name": "TestDomain",
+				"version": "1",
+				"chainId": "1",
+				"verifyingContract": "0x0000000000000000000000000000000000000000"
+			}),
+			primary_type: "PermitBatchTransferFrom".to_string(),
+			message: json!({
+				"permitted": [{
+					"token": "0x0000000000000000000000000000000000000000",
+					"amount": "1"
+				}],
+				"spender": "0x0000000000000000000000000000000000000001",
+				"nonce": "1",
+				"deadline": "1",
+				"witness": {}
+			}),
+			types: None,
+		};
+
+		PostOrderRequest {
+			order: OifOrder::OifEscrowV0 { payload },
+			signature: alloy_primitives::Bytes::from(vec![0u8; 65]),
+			quote_id: None,
+			origin_submission: None,
+		}
+	}
+
+	fn address_from_secret(secret: &SecretKey) -> alloy_primitives::Address {
+		let secp = Secp256k1::new();
+		let public_key = PublicKey::from_secret_key(&secp, secret);
+		let public_key_bytes = public_key.serialize_uncompressed();
+		let user_hash = alloy_primitives::keccak256(&public_key_bytes[1..]);
+		alloy_primitives::Address::from_slice(&user_hash[12..])
+	}
+
+	fn sign_permit2_payload(payload: &OrderPayload, secret: &SecretKey) -> alloy_primitives::Bytes {
+		let digest = solver_types::utils::eip712::reconstruct_permit2_digest(payload)
+			.expect("permit2 digest should reconstruct");
+		let secp = Secp256k1::new();
+		let message = Message::from_digest(digest);
+		let signature = secp.sign_ecdsa_recoverable(message, secret);
+		let (recovery_id, sig_bytes) = signature.serialize_compact();
+		let mut bytes = Vec::with_capacity(65);
+		bytes.extend_from_slice(&sig_bytes);
+		bytes.push(i32::from(recovery_id) as u8);
+		alloy_primitives::Bytes::from(bytes)
+	}
+
+	fn abi_word(value: usize) -> [u8; 32] {
+		let mut word = [0u8; 32];
+		word[24..32].copy_from_slice(&(value as u64).to_be_bytes());
+		word
+	}
+
+	fn padded_bytes(bytes: &[u8]) -> Vec<u8> {
+		let mut encoded = Vec::new();
+		encoded.extend_from_slice(&abi_word(bytes.len()));
+		encoded.extend_from_slice(bytes);
+		let padding = (32 - (bytes.len() % 32)) % 32;
+		encoded.extend(std::iter::repeat_n(0u8, padding));
+		encoded
+	}
+
+	fn compact_signature(sponsor_sig: &[u8], allocator_data: &[u8]) -> Bytes {
+		let sponsor_tail = padded_bytes(sponsor_sig);
+		let allocator_offset = 64 + sponsor_tail.len();
+
+		let mut signature = Vec::new();
+		signature.extend_from_slice(&abi_word(64));
+		signature.extend_from_slice(&abi_word(allocator_offset));
+		signature.extend_from_slice(&sponsor_tail);
+		signature.extend_from_slice(&padded_bytes(allocator_data));
+		Bytes::from(signature)
+	}
+
+	fn shifted_compact_signature(valid_sponsor_sig: &[u8]) -> Bytes {
+		let fake_fixed_offset_tail = padded_bytes(valid_sponsor_sig);
+		let actual_sponsor_sig = vec![0x44u8; valid_sponsor_sig.len()];
+		let actual_sponsor_offset = 64 + fake_fixed_offset_tail.len();
+		let actual_sponsor_tail = padded_bytes(&actual_sponsor_sig);
+		let allocator_offset = actual_sponsor_offset + actual_sponsor_tail.len();
+
+		let mut shifted_payload = Vec::new();
+		shifted_payload.extend_from_slice(&abi_word(actual_sponsor_offset));
+		shifted_payload.extend_from_slice(&abi_word(allocator_offset));
+		shifted_payload.extend_from_slice(&fake_fixed_offset_tail);
+		shifted_payload.extend_from_slice(&actual_sponsor_tail);
+		shifted_payload.extend_from_slice(&padded_bytes(&[]));
+		Bytes::from(shifted_payload)
+	}
+
+	fn sample_resource_lock_request(
+		signature_from_sponsor: impl FnOnce(&[u8]) -> Bytes,
+	) -> PostOrderRequest {
+		let chain_id = 1u64;
+		let nonce = 1u64;
+		let expires = 1_700_000_600u32;
+		let fill_deadline = 1_700_000_000u32;
+		let input_oracle_hex = "0x2222222222222222222222222222222222222222";
+		let lock_tag = [0xAAu8; 12];
+		let token_address_bytes = [0x33u8; 20];
+		let output_chain_id = 137u64;
+		let output_amount = U256::from(500u64);
+		let output_token_bytes32 = [0x44u8; 32];
+		let output_recipient = [0x55u8; 32];
+		let output_oracle = [0x66u8; 32];
+		let output_settler = [0x77u8; 32];
+		let compact_settler_hex = "0x9999999999999999999999999999999999999999";
+
+		let token_id = {
+			let mut bytes = [0u8; 32];
+			bytes[..12].copy_from_slice(&lock_tag);
+			bytes[12..].copy_from_slice(&token_address_bytes);
+			U256::from_be_bytes(bytes)
+		};
+		let input_amount = U256::from(1_000u64);
+
+		let secret_key = SecretKey::from_byte_array([0x11u8; 32]).expect("valid secret key");
+		let user_address = address_from_secret(&secret_key);
+		let input_oracle_bytes = hex::decode(input_oracle_hex.trim_start_matches("0x")).unwrap();
+		let input_oracle = AlloyAddress::from_slice(&input_oracle_bytes);
+
+		let outputs = vec![SolMandateOutput {
+			oracle: output_oracle.into(),
+			settler: output_settler.into(),
+			chainId: U256::from(output_chain_id),
+			token: output_token_bytes32.into(),
+			amount: output_amount,
+			recipient: output_recipient.into(),
+			callbackData: Vec::new().into(),
+			context: Vec::new().into(),
+		}];
+
+		let standard_order = OifStandardOrder {
+			user: user_address,
+			nonce: U256::from(nonce),
+			originChainId: U256::from(chain_id),
+			expires,
+			fillDeadline: fill_deadline,
+			inputOracle: input_oracle,
+			inputs: vec![[token_id, input_amount]],
+			outputs,
+		};
+
+		let contract_address = AlloyAddress::from_slice(
+			&hex::decode(compact_settler_hex.trim_start_matches("0x")).unwrap(),
+		);
+		let struct_hash = crate::eip712::compact::create_message_hasher()
+			.compute_message_hash(
+				&OifStandardOrder::abi_encode(&standard_order),
+				contract_address,
+			)
+			.expect("struct hash");
+		let domain_separator = FixedBytes::from([0x99u8; 32]);
+		let digest = keccak256(
+			[
+				&[0x19, 0x01][..],
+				domain_separator.as_slice(),
+				struct_hash.as_slice(),
+			]
+			.concat(),
+		);
+
+		let secp = Secp256k1::new();
+		let message = Message::from_digest(*digest);
+		let signature = secp.sign_ecdsa_recoverable(message, &secret_key);
+		let (recovery_id, sig_bytes) = signature.serialize_compact();
+		let mut sponsor_sig = sig_bytes.to_vec();
+		let rec_id: i32 = recovery_id.into();
+		sponsor_sig.push((rec_id as u8) + 27);
+		let signature = signature_from_sponsor(&sponsor_sig);
+
+		let lock_tag_hex = format!("0x{}", hex::encode(lock_tag));
+		let token_hex = format!("0x{}", hex::encode(token_address_bytes));
+		let payload = OrderPayload {
+			signature_type: SignatureType::Eip712,
+			domain: json!({
+				"name": "BatchCompact",
+				"version": "1",
+				"chainId": chain_id.to_string(),
+				"verifyingContract": "0x8888888888888888888888888888888888888888",
+			}),
+			primary_type: "BatchCompact".to_string(),
+			message: json!({
+				"sponsor": format!("{user_address:#x}"),
+				"nonce": nonce.to_string(),
+				"expires": expires.to_string(),
+				"mandate": {
+					"fillDeadline": fill_deadline.to_string(),
+					"inputOracle": input_oracle_hex,
+					"outputs": [{
+						"oracle": format!("0x{}", hex::encode(output_oracle)),
+						"settler": format!("0x{}", hex::encode(output_settler)),
+						"chainId": output_chain_id.to_string(),
+						"token": format!("0x{}", hex::encode(output_token_bytes32)),
+						"amount": output_amount.to_string(),
+						"recipient": format!("0x{}", hex::encode(output_recipient)),
+						"callbackData": "0x",
+						"context": "0x"
+					}]
+				},
+				"commitments": [{
+					"lockTag": lock_tag_hex,
+					"token": token_hex,
+					"amount": input_amount.to_string()
+				}]
+			}),
+			types: None,
+		};
+
+		let canonical_signature = compact_signature(&sponsor_sig, &[]);
+		assert!(
+			solver_types::standards::eip7683::compact_signatures::decode_compact_signatures(
+				&canonical_signature
+			)
+			.is_ok()
+		);
+
+		PostOrderRequest {
+			order: OifOrder::OifResourceLockV0 { payload },
+			signature,
+			quote_id: None,
+			origin_submission: None,
+		}
+	}
+
+	fn sample_resource_lock_request_with_shifted_signature() -> PostOrderRequest {
+		sample_resource_lock_request(shifted_compact_signature)
+	}
+
+	fn sample_resource_lock_request_with_allocator_data(
+		allocator_data: &'static [u8],
+	) -> PostOrderRequest {
+		sample_resource_lock_request(|sponsor_sig| compact_signature(sponsor_sig, allocator_data))
+	}
+
+	fn sample_permit2_request_with_witness_user(
+		witness_user: &str,
+		secret: &SecretKey,
+	) -> PostOrderRequest {
+		let payload = OrderPayload {
+			signature_type: SignatureType::Eip712,
+			domain: json!({
+				"name": "Permit2",
+				"chainId": "1",
+				"verifyingContract": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+			}),
+			primary_type: "PermitBatchWitnessTransferFrom".to_string(),
+			message: json!({
+				"permitted": [{
+					"token": "0x0000000000000000000000000000000000000033",
+					"amount": "1000"
+				}],
+				"spender": "0x0000000000000000000000000000000000000011",
+				"nonce": "1",
+				"deadline": "1700000100",
+				"witness": {
+					"user": witness_user,
+					"expires": 1700000000u64,
+					"inputOracle": "0x2222222222222222222222222222222222222222",
+					"outputs": [{
+						"oracle": "0x0000000000000000000000003333333333333333333333333333333333333333",
+						"settler": "0x0000000000000000000000004444444444444444444444444444444444444444",
+						"chainId": 42161,
+						"token": "0x0000000000000000000000000000000000000000000000000000000000000033",
+						"amount": "900",
+						"recipient": "0x0000000000000000000000005555555555555555555555555555555555555555",
+						"callbackData": "0x",
+						"context": "0x"
+					}]
+				}
+			}),
+			types: None,
+		};
+
+		PostOrderRequest {
+			order: OifOrder::OifEscrowV0 {
+				payload: payload.clone(),
+			},
+			signature: sign_permit2_payload(&payload, secret),
+			quote_id: None,
+			origin_submission: None,
+		}
+	}
+
+	#[test]
+	fn create_intent_from_payload_rejects_invalid_json() {
+		let payload = json!({"unexpected": true});
+		let result = super::create_intent_from_payload(payload);
+		assert!(matches!(
+			result,
+			Err(APIError::BadRequest {
+				error_type: ApiErrorType::InvalidRequest,
+				..
+			})
+		));
+	}
+
+	#[test]
+	fn create_admin_storage_backend_returns_error_for_invalid_redis_url() {
+		let err = match super::create_admin_storage_backend(String::new(), false) {
+			Ok(_) => panic!("expected invalid redis URL to fail"),
+			Err(err) => err,
+		};
+		assert!(err.to_string().contains("Admin storage error"));
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn create_admin_config_store_accepts_shared_storage_backend() {
+		let shared_storage =
+			create_storage_backend(StoreConfig::Memory).expect("expected memory backend");
+		let config_store = super::create_admin_config_store(shared_storage, "test-solver")
+			.expect("expected config store initialization");
+
+		assert!(!config_store
+			.exists()
+			.await
+			.expect("expected config store exists check to succeed"));
+	}
+
+	#[test]
+	fn create_admin_config_store_returns_error_for_empty_solver_id() {
+		let shared_storage =
+			create_storage_backend(StoreConfig::Memory).expect("expected memory backend");
+		let err = match super::create_admin_config_store(shared_storage, "") {
+			Ok(_) => panic!("expected empty solver ID to fail"),
+			Err(err) => err,
+		};
+		assert!(err.to_string().contains("Config store error"));
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn create_admin_nonce_store_accepts_shared_storage_backend() {
+		let shared_storage =
+			create_storage_backend(StoreConfig::Memory).expect("expected memory backend");
+		let nonce_store = super::create_admin_nonce_store(shared_storage, "test-solver", 300)
+			.expect("expected nonce store initialization");
+
+		let nonce = nonce_store
+			.generate()
+			.await
+			.expect("expected nonce generation");
+		assert!(nonce_store
+			.exists(nonce)
+			.await
+			.expect("expected nonce existence check"));
+		nonce_store
+			.consume(nonce)
+			.await
+			.expect("expected nonce consume");
+		assert!(!nonce_store
+			.exists(nonce)
+			.await
+			.expect("expected nonce existence check after consume"));
+	}
+
+	#[test]
+	fn create_admin_nonce_store_returns_error_for_empty_solver_id() {
+		let shared_storage =
+			create_storage_backend(StoreConfig::Memory).expect("expected memory backend");
+		let err = match super::create_admin_nonce_store(shared_storage, "", 300) {
+			Ok(_) => panic!("expected empty solver ID to fail"),
+			Err(err) => err,
+		};
+		assert!(err.to_string().contains("Nonce store error"));
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn handle_auth_register_returns_service_unavailable_without_jwt_service() {
+		let state = build_test_app_state(None).await;
+		let response = super::handle_auth_register(
+			State(state),
+			Json(crate::apis::auth::RegisterRequest {
+				client_id: "test-client".to_string(),
+				client_name: None,
+				scopes: None,
+			}),
+		)
+		.await
+		.into_response();
+
+		assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn handle_auth_refresh_returns_service_unavailable_without_jwt_service() {
+		let state = build_test_app_state(None).await;
+		let response = super::handle_auth_refresh(
+			State(state),
+			Json(crate::apis::auth::RefreshRequest {
+				refresh_token: "token".to_string(),
+			}),
+		)
+		.await
+		.into_response();
+
+		assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn handle_auth_siwe_nonce_returns_service_unavailable_without_dependencies() {
+		let state = build_test_app_state(None).await;
+		let response = super::handle_auth_siwe_nonce(
+			State(state),
+			Json(crate::apis::auth::SiweNonceRequest {
+				address: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266".to_string(),
+			}),
+		)
+		.await
+		.into_response();
+
+		assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn handle_auth_siwe_verify_returns_service_unavailable_without_dependencies() {
+		let state = build_test_app_state(None).await;
+		let response = super::handle_auth_siwe_verify(
+			State(state),
+			Json(crate::apis::auth::SiweVerifyRequest {
+				message: "message".to_string(),
+				signature: "signature".to_string(),
+			}),
+		)
+		.await
+		.into_response();
+
+		assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn quotes_route_requires_create_quotes_scope_when_order_auth_enabled() {
+		let api_config = ApiConfig {
+			enabled: true,
+			host: "127.0.0.1".to_string(),
+			port: 0,
+			timeout_seconds: 30,
+			max_request_size: 1024 * 1024,
+			implementations: Default::default(),
+			rate_limiting: None,
+			cors: None,
+			auth: Some(test_auth_config()),
+			quote: None,
+		};
+		let jwt = Arc::new(JwtService::new(test_auth_config()).unwrap());
+		let app = test_quote_app(api_config, Some(jwt.clone())).await;
+
+		let missing = app
+			.clone()
+			.oneshot(
+				Request::builder()
+					.method("POST")
+					.uri("/quotes")
+					.header("content-type", "application/json")
+					.body(Body::from("{}"))
+					.unwrap(),
+			)
+			.await
+			.unwrap();
+		assert_eq!(missing.status(), StatusCode::UNAUTHORIZED);
+
+		let wrong_scope = jwt
+			.generate_access_token("orders-client", vec![AuthScope::CreateOrders])
+			.unwrap();
+		let response = app
+			.oneshot(
+				Request::builder()
+					.method("POST")
+					.uri("/quotes")
+					.header("content-type", "application/json")
+					.header("authorization", format!("Bearer {wrong_scope}"))
+					.body(Body::from("{}"))
+					.unwrap(),
+			)
+			.await
+			.unwrap();
+		assert_eq!(response.status(), StatusCode::FORBIDDEN);
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn quotes_route_enforces_configured_request_body_limit() {
+		let api_config = ApiConfig {
+			enabled: true,
+			host: "127.0.0.1".to_string(),
+			port: 0,
+			timeout_seconds: 30,
+			max_request_size: 8,
+			implementations: Default::default(),
+			rate_limiting: None,
+			cors: None,
+			auth: None,
+			quote: None,
+		};
+		let app = test_quote_app(api_config, None).await;
+
+		let response = app
+			.oneshot(
+				Request::builder()
+					.method("POST")
+					.uri("/quotes")
+					.header("content-type", "application/json")
+					.body(Body::from("{\"intent\":{}}"))
+					.unwrap(),
+			)
+			.await
+			.unwrap();
+		assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn quotes_route_enforces_configured_rate_limit() {
+		let api_config = ApiConfig {
+			enabled: true,
+			host: "127.0.0.1".to_string(),
+			port: 0,
+			timeout_seconds: 30,
+			max_request_size: 1024 * 1024,
+			implementations: Default::default(),
+			rate_limiting: Some(RateLimitConfig {
+				enabled: true,
+				requests_per_minute: 1,
+				burst_size: 1,
+			}),
+			cors: None,
+			auth: None,
+			quote: None,
+		};
+		let app = test_quote_app(api_config, None).await;
+
+		let request = || {
+			Request::builder()
+				.method("POST")
+				.uri("/quotes")
+				.header("content-type", "application/json")
+				.body(Body::from("{}"))
+				.unwrap()
+		};
+
+		let first = app.clone().oneshot(request()).await.unwrap();
+		assert_ne!(first.status(), StatusCode::TOO_MANY_REQUESTS);
+
+		let second = app.oneshot(request()).await.unwrap();
+		assert_eq!(second.status(), StatusCode::TOO_MANY_REQUESTS);
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn quotes_route_applies_default_rate_limit_when_config_omits_it() {
+		let mut api_config = test_api_config();
+		api_config.rate_limiting = None;
+		let app = test_quote_app(api_config, None).await;
+
+		for _ in 0..solver_config::DEFAULT_API_RATE_LIMIT_BURST {
+			let response = app
+				.clone()
+				.oneshot(
+					Request::builder()
+						.method("POST")
+						.uri("/quotes")
+						.header("content-type", "application/json")
+						.body(Body::from("{}"))
+						.unwrap(),
+				)
+				.await
+				.unwrap();
+			assert_ne!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+		}
+
+		let limited = app
+			.oneshot(
+				Request::builder()
+					.method("POST")
+					.uri("/quotes")
+					.header("content-type", "application/json")
+					.body(Body::from("{}"))
+					.unwrap(),
+			)
+			.await
+			.unwrap();
+		assert_eq!(limited.status(), StatusCode::TOO_MANY_REQUESTS);
+	}
+
+	#[test]
+	fn api_rate_limiter_evicts_expired_client_entries() {
+		let limiter =
+			crate::api_hardening::ApiRateLimiter::new_for_test(1, Duration::from_millis(10));
+		let first_ip = IpAddr::V4(Ipv4Addr::new(192, 0, 2, 1));
+		let second_ip = IpAddr::V4(Ipv4Addr::new(192, 0, 2, 2));
+
+		assert!(limiter.allows(first_ip));
+		assert!(limiter.allows(second_ip));
+		assert_eq!(limiter.tracked_clients_for_test(), 2);
+
+		std::thread::sleep(Duration::from_millis(15));
+		assert!(limiter.allows(first_ip));
+		assert_eq!(
+			limiter.tracked_clients_for_test(),
+			1,
+			"expired clients should be removed opportunistically"
+		);
+	}
+
+	#[test]
+	fn quote_concurrency_limiter_rejects_when_saturated() {
+		let limiter = crate::api_hardening::QuoteConcurrencyLimiter::new(1);
+		let _held = limiter
+			.try_acquire()
+			.expect("first quote request should acquire the only permit");
+
+		assert!(
+			limiter.try_acquire().is_none(),
+			"saturated quote limiter should reject immediately"
+		);
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn submit_order_returns_service_unavailable_when_discovery_not_configured() {
+		let state = build_test_app_state(None).await;
+		let response = super::submit_order_to_discovery(&state, &sample_post_order_request()).await;
+
+		assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+		let body_bytes = body::to_bytes(response.into_body(), usize::MAX)
+			.await
+			.expect("body");
+		let parsed: PostOrderResponse = serde_json::from_slice(&body_bytes).expect("parse body");
+		assert_eq!(parsed.status, PostOrderResponseStatus::Error);
+		assert!(parsed
+			.message
+			.as_deref()
+			.unwrap_or_default()
+			.contains("Intent submission service not configured"));
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn handle_order_rejects_direct_submission_when_intake_disabled() {
+		let state = build_intake_disabled_test_app_state(None).await;
+		let payload = to_value(sample_post_order_request()).expect("serialize request");
+
+		let response = super::handle_order(State(state), None, Json(payload)).await;
+
+		assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+		let body_bytes = body::to_bytes(response.into_body(), usize::MAX)
+			.await
+			.expect("body");
+		let parsed: ErrorResponse = serde_json::from_slice(&body_bytes).expect("parse body");
+		assert_eq!(parsed.error, "SOLVER_INTAKE_DISABLED");
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn handle_order_rejects_quote_acceptance_before_quote_lookup_when_intake_disabled() {
+		let state = build_intake_disabled_test_app_state(None).await;
+		let payload = json!({
+			"quoteId": "missing-quote-that-must-not-be-looked-up",
+			"signature": "0x1234"
+		});
+
+		let response = super::handle_order(State(state), None, Json(payload)).await;
+
+		assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+		let body_bytes = body::to_bytes(response.into_body(), usize::MAX)
+			.await
+			.expect("body");
+		let parsed: ErrorResponse = serde_json::from_slice(&body_bytes).expect("parse body");
+		assert_eq!(parsed.error, "SOLVER_INTAKE_DISABLED");
+		assert!(parsed.message.contains("intake"));
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn handle_order_rejects_shifted_compact_signature_before_discovery_forwarding() {
+		let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+		let stub = StubDiscovery {
+			calls: calls.clone(),
+			accept_order_id: Some("should-not-be-used".to_string()),
+		};
+		let state = build_test_app_state_with_discovery(
+			Some("offchain_eip7683".to_string()),
+			stub_discovery_service(stub),
+		)
+		.await;
+		let payload = to_value(sample_resource_lock_request_with_shifted_signature())
+			.expect("serialize request");
+
+		let response = super::handle_order(State(state), None, Json(payload)).await;
+
+		assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+		let body_bytes = body::to_bytes(response.into_body(), usize::MAX)
+			.await
+			.expect("body");
+		let parsed: ErrorResponse = serde_json::from_slice(&body_bytes).expect("parse body");
+		assert_eq!(parsed.error, "ORDER_VALIDATION_FAILED");
+		assert!(parsed.message.contains("Compact"));
+		assert_eq!(
+			calls.load(std::sync::atomic::Ordering::SeqCst),
+			0,
+			"order must not reach discovery"
+		);
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn handle_order_rejects_unauthorized_compact_allocator_data_before_forwarding() {
+		let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+		let stub = StubDiscovery {
+			calls: calls.clone(),
+			accept_order_id: Some("should-not-be-used".to_string()),
+		};
+		let state = build_test_app_state_with_allocator_authorized(
+			Some("offchain_eip7683".to_string()),
+			false,
+			stub_discovery_service(stub),
+		)
+		.await;
+		let payload = to_value(sample_resource_lock_request_with_allocator_data(
+			b"garbage allocator data",
+		))
+		.expect("serialize request");
+
+		let response = super::handle_order(State(state), None, Json(payload)).await;
+
+		assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+		let body_bytes = body::to_bytes(response.into_body(), usize::MAX)
+			.await
+			.expect("body");
+		let parsed: ErrorResponse = serde_json::from_slice(&body_bytes).expect("parse body");
+		assert_eq!(parsed.error, "ORDER_VALIDATION_FAILED");
+		// Proves the order reached the allocator-authorization check (isClaimAuthorized),
+		// not an earlier gate (trusted-allocator pin / reset period / malformed window).
+		assert!(parsed.message.contains("did not authorize"));
+		assert_eq!(
+			calls.load(std::sync::atomic::Ordering::SeqCst),
+			0,
+			"order must not reach discovery"
+		);
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn submit_order_succeeds_with_accepting_discovery() {
+		let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+		let stub = StubDiscovery {
+			calls: calls.clone(),
+			accept_order_id: Some("order-123".to_string()),
+		};
+		let state = build_test_app_state_with_discovery(
+			Some("offchain_eip7683".to_string()),
+			stub_discovery_service(stub),
+		)
+		.await;
+
+		let response = super::submit_order_to_discovery(&state, &sample_post_order_request()).await;
+
+		assert_eq!(response.status(), StatusCode::OK);
+
+		let body_bytes = body::to_bytes(response.into_body(), usize::MAX)
+			.await
+			.expect("body");
+		let parsed: PostOrderResponse = serde_json::from_slice(&body_bytes).expect("parse body");
+		assert_eq!(parsed.status, PostOrderResponseStatus::Received);
+		assert_eq!(parsed.order_id.as_deref(), Some("order-123"));
+		assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn create_intent_from_quote_errors_without_quote_id() {
+		let state = build_test_app_state(None).await;
+		let payload = json!({ "signature": "0x1234" });
+
+		let error = super::create_intent_from_quote(payload, &state, "eip7683")
+			.await
+			.expect_err("expected missing quoteId error");
+
+		assert!(matches!(
+			error,
+			APIError::BadRequest {
+				error_type: ApiErrorType::MissingSignature,
+				..
+			}
+		));
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn create_intent_from_quote_errors_without_signature() {
+		let state = build_test_app_state(None).await;
+		let payload = json!({ "quoteId": "quote-123" });
+
+		let error = super::create_intent_from_quote(payload, &state, "eip7683")
+			.await
+			.expect_err("expected missing signature error");
+
+		assert!(matches!(
+			error,
+			APIError::BadRequest {
+				error_type: ApiErrorType::MissingSignature,
+				..
+			}
+		));
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn create_intent_from_quote_errors_when_quote_not_found() {
+		let state = build_test_app_state(None).await;
+		let payload = json!({
+			"quoteId": "missing-quote",
+			"signature": "0x1234"
+		});
+
+		let error = super::create_intent_from_quote(payload, &state, "eip7683")
+			.await
+			.expect_err("expected quote not found error");
+
+		assert!(matches!(
+			error,
+			APIError::BadRequest {
+				error_type: ApiErrorType::QuoteNotFound,
+				..
+			}
+		));
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn extract_intent_request_returns_direct_payload_unchanged() {
+		let state = build_test_app_state(None).await;
+		let resource_order_payload = OrderPayload {
+			signature_type: SignatureType::Eip712,
+			domain: json!({
+				"name": "ResourceLock",
+				"version": "1",
+				"chainId": "1"
+			}),
+			primary_type: "BatchCompact".to_string(),
+			message: json!({
+				"sponsor": "0x1111111111111111111111111111111111111111",
+				"nonce": "1",
+				"expires": "1700000000",
+				"mandate": {
+					"fillDeadline": "1700000100",
+					"inputOracle": "0x2222222222222222222222222222222222222222",
+					"outputs": []
+				},
+				"commitments": []
+			}),
+			types: None,
+		};
+
+		let original_request = PostOrderRequest {
+			order: OifOrder::OifResourceLockV0 {
+				payload: resource_order_payload,
+			},
+			signature: alloy_primitives::Bytes::from(vec![0xAA, 0xBB]),
+			quote_id: None,
+			origin_submission: None,
+		};
+
+		let payload_value = to_value(&original_request).expect("serialize request");
+		let result = super::extract_intent_request(payload_value.clone(), &state, "eip7683")
+			.await
+			.expect("expected successful extraction");
+
+		let result_value = to_value(&result).expect("serialize result");
+		assert_eq!(result_value, payload_value);
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn extract_intent_request_errors_when_signature_recovery_fails() {
+		let state = build_test_app_state(None).await;
+		let mut request = sample_post_order_request();
+		request.signature = alloy_primitives::Bytes::from(Vec::<u8>::new());
+		let payload = to_value(&request).expect("serialize request");
+
+		let error = super::extract_intent_request(payload, &state, "eip7683")
+			.await
+			.expect_err("expected sponsor extraction failure");
+
+		assert!(matches!(
+			error,
+			APIError::BadRequest {
+				error_type: ApiErrorType::OrderValidationFailed,
+				..
+			}
+		));
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn extract_intent_request_preserves_witness_user_for_permit2_orders() {
+		let state = build_test_app_state(None).await;
+		let witness_user = "0x1111111111111111111111111111111111111111";
+		let secret = SecretKey::from_byte_array([0x31u8; 32]).expect("valid secret");
+		let sponsor = address_from_secret(&secret);
+		assert_ne!(format!("{sponsor:#x}"), witness_user);
+
+		let request = sample_permit2_request_with_witness_user(witness_user, &secret);
+		let payload = to_value(&request).expect("serialize request");
+
+		let result = super::extract_intent_request(payload, &state, "eip7683")
+			.await
+			.expect("expected successful extraction");
+
+		let OifOrder::OifEscrowV0 { payload } = &result.order else {
+			panic!("expected permit2 order");
+		};
+		assert_eq!(
+			payload
+				.message
+				.get("witness")
+				.and_then(|w| w.get("user"))
+				.and_then(|u| u.as_str()),
+			Some(witness_user)
+		);
+		assert!(
+			payload.message.get("user").is_none(),
+			"permit2 acceptance should not rewrite the logical order user"
+		);
+
+		let standard_order =
+			OifStandardOrder::try_from(&result.order).expect("standard order conversion");
+		assert_eq!(format!("{:#x}", standard_order.user), witness_user);
+		assert_ne!(
+			format!("{:#x}", standard_order.user),
+			format!("{:#x}", sponsor)
+		);
+		assert_eq!(
+			hex::encode(result.signature.as_ref()),
+			hex::encode(request.signature.as_ref())
+		);
+	}
+}

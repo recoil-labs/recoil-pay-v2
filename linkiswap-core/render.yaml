@@ -1,0 +1,119 @@
+# Render Blueprint for the LinkiSwap OIF stack
+# UI (static) -> aggregator (web) -> fill-worker (background) -> Postgres + Redis
+# Deploy: Render Dashboard -> New -> Blueprint -> pick this repo.
+# Set the `sync: false` secrets in the dashboard after the first deploy.
+#
+# NOTE: This blueprint intentionally drops the `oif-solver` private service
+# that previously lived here. The OIF solver is a separate downstream binary
+# that the aggregator calls via config.json — it is not part of this deploy.
+#
+# The aggregator connects to the EXISTING `linkiswap-main-db` Postgres
+# (already provisioned at id dpg-d9d05hj7uimc73f7nrkg-a) and the EXISTING
+# `oif-redis` Redis (red-d9d0jumrnols73cjrqng). They are referenced via
+# `fromService:` so no duplicate instances are created.
+
+services:
+  # ---- Aggregator (public web service the UI calls) ----
+  - type: web
+    name: linkiswap-aggregator
+    runtime: docker
+    region: oregon
+    plan: starter
+    rootDir: aggregator
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: linkiswap-main-db
+          property: connectionString
+      - key: INTEGRITY_SECRET
+        generateValue: true          # 256-bit base64 secret (>=32 chars)
+      - key: FILL_WALLET_ENCRYPTION_KEY
+        generateValue: true          # 32 raw bytes — base64-encoded by Render
+                                     # at rest. Required by the aggregator's
+                                     # at-rest encryption of operator
+                                     # fill-wallet private keys.
+      - key: FILL_WORKER_TOKEN
+        generateValue: true          # Shared secret authenticating the hosted
+                                     # fill-worker's server-to-server calls
+                                     # (sign-fill, order status). The worker
+                                     # copies this exact value via
+                                     # `fromService` below, so the two stay in
+                                     # sync without the secret ever living in
+                                     # this file.
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: oif-redis
+          property: connectionString
+      - key: RUST_LOG
+        value: info
+      - key: PORT
+        value: 10000
+
+  # ---- Fill-worker (multi-tenant, subscribes to /ws/orders) ----
+  # The same Dockerfile as the aggregator. We override the entrypoint with
+  # `dockerCommand` to launch `fill-worker` instead of `oif-aggregator`.
+  #
+  # This worker is **multi-tenant**: one instance serves every operator
+  # on the platform. Operators never paste env vars or run infra — they
+  # just register via the dashboard, and the aggregator signs fills on
+  # their behalf using encrypted fill-wallet keys (see
+  # FILL_WALLET_ENCRYPTION_KEY on linkiswap-aggregator).
+  #
+  # Required env vars:
+  #   AGGREGATOR_URL — where to reach the aggregator (private network)
+  #   CHAIN_RPCS     — chain-id → RPC-URL for broadcasting fills
+  # Optional:
+  #   FILL_WORKER_URL — diagnostic only; reported to the aggregator for
+  #                     logging. The worker itself doesn't expose a
+  #                     meaningful HTTP surface in the multi-tenant
+  #                     model (the aggregator's /sign-fill endpoint is
+  #                     what fills get signed).
+  - type: pserv
+    name: linkiswap-fill-worker
+    runtime: docker
+    region: oregon
+    plan: starter
+    rootDir: aggregator
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: /usr/local/bin/fill-worker
+    autoDeploy: true
+    envVars:
+      - key: AGGREGATOR_URL
+        value: http://linkiswap-aggregator:10000
+      # Copies the aggregator's generated token so both sides share one
+      # secret. Without it the worker's sign-fill / order-status calls
+      # are rejected and no fill can settle.
+      - key: FILL_WORKER_TOKEN
+        fromService:
+          type: web
+          name: linkiswap-aggregator
+          envVarKey: FILL_WORKER_TOKEN
+      # Chain RPCs for the three settlement transactions (openFor on the
+      # origin chain, fill on the destination, finalise back on origin).
+      # Required: with no RPCs the worker rejects every order.
+      - key: CHAIN_RPCS
+        value: 11155420:https://sepolia.optimism.io,84532:https://sepolia.base.org,11155111:https://ethereum-sepolia-rpc.publicnode.com,80002:https://rpc-amoy.polygon.technology
+      # The worker writes its bootstrap identity (a fresh secp256k1
+      # keypair) to a JSON file on disk so it survives container
+      # restarts. The default path `/var/lib/fill-worker` is root-owned,
+      # but this image runs as `nonroot`, so we point the worker at a
+      # path under the `nonroot` user's home directory.
+      - key: FILL_WORKER_DATA_DIR
+        value: /home/nonroot/.fill-worker
+      - key: RUST_LOG
+        value: info
+
+  # ---- Documentation Site ----
+  - type: web
+    name: linkiswap-docs
+    runtime: static
+    rootDir: docs-site
+    buildCommand: npm install && npm run build
+    staticPublishPath: build
+    domains:
+      - docs.linkiswap.com

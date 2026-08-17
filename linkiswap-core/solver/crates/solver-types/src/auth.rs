@@ -1,0 +1,561 @@
+//! Authentication and authorization types for the OIF solver API.
+//!
+//! This module provides types for JWT-based authentication including
+//! scopes, claims, and configuration structures.
+
+use alloy_primitives::Address;
+use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::str::FromStr;
+
+use crate::SecretString;
+
+/// JWT token scopes defining access permissions
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AuthScope {
+	/// Permission to read order information
+	ReadOrders,
+	/// Permission to create new orders
+	CreateOrders,
+	/// Permission to create quotes
+	CreateQuotes,
+	/// Permission to read quotes
+	ReadQuotes,
+	/// Admin read scope - grants read-only access to admin data endpoints
+	AdminRead,
+	/// Admin scope - grants all permissions
+	AdminAll,
+}
+
+impl AuthScope {
+	/// Check if this scope grants access to a specific action
+	pub fn grants(&self, required: &AuthScope) -> bool {
+		match self {
+			AuthScope::AdminAll => true,
+			_ => self == required,
+		}
+	}
+}
+
+impl fmt::Display for AuthScope {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let scope_str = match self {
+			AuthScope::ReadOrders => "read-orders",
+			AuthScope::CreateOrders => "create-orders",
+			AuthScope::CreateQuotes => "create-quotes",
+			AuthScope::ReadQuotes => "read-quotes",
+			AuthScope::AdminRead => "admin-read",
+			AuthScope::AdminAll => "admin-all",
+		};
+		write!(f, "{scope_str}")
+	}
+}
+
+impl FromStr for AuthScope {
+	type Err = String;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		match s {
+			"read-orders" => Ok(AuthScope::ReadOrders),
+			"create-orders" => Ok(AuthScope::CreateOrders),
+			"create-quotes" => Ok(AuthScope::CreateQuotes),
+			"read-quotes" => Ok(AuthScope::ReadQuotes),
+			"admin-read" => Ok(AuthScope::AdminRead),
+			"admin-all" => Ok(AuthScope::AdminAll),
+			_ => Err(format!("Unknown scope: {s}")),
+		}
+	}
+}
+
+/// Administrative wallet role.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AdminRole {
+	/// Full admin access.
+	Admin,
+	/// Read-only admin data access.
+	ReadOnly,
+}
+
+impl fmt::Display for AdminRole {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let role = match self {
+			AdminRole::Admin => "admin",
+			AdminRole::ReadOnly => "read-only",
+		};
+		write!(f, "{role}")
+	}
+}
+
+impl FromStr for AdminRole {
+	type Err = String;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		match s {
+			"admin" => Ok(AdminRole::Admin),
+			"read-only" => Ok(AdminRole::ReadOnly),
+			_ => Err(format!("Unknown admin role: {s}")),
+		}
+	}
+}
+
+/// Typed admin whitelist entry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminWhitelistEntry {
+	/// Wallet address.
+	pub address: Address,
+	/// Role granted to the wallet.
+	pub role: AdminRole,
+}
+
+/// JWT token kind. Encoded as the `typ` claim so that refresh tokens cannot be
+/// presented as bearer access tokens (or vice-versa) — the two token types
+/// carry the same claim shape, so without this discriminator either could be
+/// used in the other's flow.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum JwtTokenKind {
+	/// Short-lived token used to authorize API requests via the `Authorization`
+	/// header.
+	Access,
+	/// Long-lived token accepted only by the refresh endpoint to mint a new
+	/// access/refresh pair.
+	Refresh,
+}
+
+/// JWT claims structure for token validation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JwtClaims {
+	/// Subject (client identifier)
+	pub sub: String,
+	/// Expiration time (Unix timestamp)
+	pub exp: i64,
+	/// Issued at (Unix timestamp)
+	pub iat: i64,
+	/// Issuer
+	pub iss: String,
+	/// Scopes granted to this token
+	pub scope: Vec<AuthScope>,
+	/// Optional nonce for one-time tokens
+	pub nonce: Option<String>,
+	/// Token kind discriminator. Required: tokens minted before this field
+	/// existed are no longer accepted, forcing a re-login after upgrade.
+	pub typ: JwtTokenKind,
+}
+
+/// Refresh token data stored persistently
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RefreshTokenData {
+	/// Client identifier
+	pub client_id: String,
+	/// Granted scopes
+	pub scopes: Vec<AuthScope>,
+	/// Token expiration timestamp
+	pub expires_at: i64,
+	/// When the token was issued
+	pub issued_at: i64,
+}
+
+/// Authentication configuration for the API service.
+///
+/// `orders_auth_enabled` controls **only** JWT-gating of the public Orders API
+/// (`POST /orders` and `GET /orders/{id}`). It does NOT gate admin SIWE login;
+/// SIWE is gated solely by the admin block (see [`AdminConfig::enabled`]).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthConfig {
+	/// Whether the public Orders API requires a JWT.
+	///
+	/// When false, `POST /orders` and `GET /orders/{id}` are open. SIWE admin
+	/// login still works whenever the `admin` block has `enabled: true`.
+	pub orders_auth_enabled: bool,
+	/// JWT signing secret
+	pub jwt_secret: SecretString,
+	/// Access token expiry in hours
+	pub access_token_expiry_hours: u32,
+	/// Refresh token expiry in hours
+	pub refresh_token_expiry_hours: u32,
+	/// JWT issuer identifier
+	pub issuer: String,
+	/// Whether public self-registration endpoint is enabled.
+	/// Defaults to false for safer behavior.
+	#[serde(default = "default_public_register_enabled")]
+	pub public_register_enabled: bool,
+	/// Admin authentication configuration (optional)
+	/// If not present, admin authentication via wallet signatures is disabled
+	#[serde(default)]
+	pub admin: Option<AdminConfig>,
+}
+
+fn default_public_register_enabled() -> bool {
+	false
+}
+
+/// Admin authentication configuration for wallet-based admin operations.
+///
+/// This configuration enables admins to authenticate using their Ethereum
+/// wallet signatures. Works for both SIWE session-based and per-action
+/// signature approaches.
+#[derive(Debug, Clone, Serialize)]
+pub struct AdminConfig {
+	/// Enable admin authentication
+	#[serde(default)]
+	pub enabled: bool,
+
+	/// Domain for signature verification (prevents cross-site attacks).
+	/// Example: "solver.example.com"
+	pub domain: String,
+
+	/// Chain ID for EIP-712 domain separator.
+	/// The wallet must be connected to this chain when signing admin actions.
+	/// If not set, uses the first network's chain ID from config.
+	#[serde(default)]
+	pub chain_id: Option<u64>,
+
+	/// Nonce TTL in seconds. Nonces expire after this duration.
+	/// Default: 300 seconds (5 minutes)
+	#[serde(default = "default_nonce_ttl")]
+	pub nonce_ttl_seconds: u64,
+
+	/// Typed admin whitelist entries.
+	#[serde(default)]
+	pub whitelist: Vec<AdminWhitelistEntry>,
+}
+
+fn default_nonce_ttl() -> u64 {
+	300
+}
+
+impl<'de> Deserialize<'de> for AdminConfig {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		#[derive(Deserialize)]
+		struct AdminConfigInput {
+			#[serde(default)]
+			enabled: bool,
+			domain: String,
+			#[serde(default)]
+			chain_id: Option<u64>,
+			#[serde(default = "default_nonce_ttl")]
+			nonce_ttl_seconds: u64,
+			#[serde(default)]
+			admin_addresses: Vec<Address>,
+			#[serde(default)]
+			whitelist: Vec<AdminWhitelistEntry>,
+		}
+
+		let input = AdminConfigInput::deserialize(deserializer)?;
+		Ok(Self {
+			enabled: input.enabled,
+			domain: input.domain,
+			chain_id: input.chain_id,
+			nonce_ttl_seconds: input.nonce_ttl_seconds,
+			whitelist: normalize_admin_whitelist(&input.admin_addresses, &input.whitelist),
+		})
+	}
+}
+
+impl AdminConfig {
+	/// Check if an address is an authorized admin.
+	///
+	/// Returns `false` if admin auth is disabled (`enabled = false`),
+	/// even if the address is in the admin list.
+	///
+	/// Comparison is done on the raw bytes, which is case-insensitive
+	/// and handles checksummed vs non-checksummed addresses correctly.
+	pub fn is_admin(&self, address: &Address) -> bool {
+		self.enabled && self.role_for(address) == Some(AdminRole::Admin)
+	}
+
+	/// Resolve an address to its configured admin role.
+	///
+	/// Admin wins over read-only if duplicate legacy/typed entries exist.
+	pub fn role_for(&self, address: &Address) -> Option<AdminRole> {
+		if self
+			.whitelist
+			.iter()
+			.any(|entry| entry.address == *address && entry.role == AdminRole::Admin)
+		{
+			Some(AdminRole::Admin)
+		} else if self
+			.whitelist
+			.iter()
+			.any(|entry| entry.address == *address && entry.role == AdminRole::ReadOnly)
+		{
+			Some(AdminRole::ReadOnly)
+		} else {
+			None
+		}
+	}
+
+	/// Return the normalized typed whitelist.
+	pub fn normalized_whitelist(&self) -> Vec<AdminWhitelistEntry> {
+		self.whitelist.clone()
+	}
+
+	/// Get the number of configured admin addresses.
+	pub fn admin_count(&self) -> usize {
+		self.normalized_whitelist()
+			.iter()
+			.filter(|entry| entry.role == AdminRole::Admin)
+			.count()
+	}
+}
+
+/// Normalize legacy admin addresses and typed whitelist entries into a set.
+///
+/// Set semantics are by address. Admin wins over read-only.
+pub fn normalize_admin_whitelist(
+	admin_addresses: &[Address],
+	whitelist: &[AdminWhitelistEntry],
+) -> Vec<AdminWhitelistEntry> {
+	let mut entries: Vec<AdminWhitelistEntry> = Vec::new();
+
+	for entry in whitelist {
+		upsert_admin_role(&mut entries, entry.address, entry.role);
+	}
+	for address in admin_addresses {
+		upsert_admin_role(&mut entries, *address, AdminRole::Admin);
+	}
+
+	entries
+}
+
+/// Upsert one role into a whitelist, with Admin winning over ReadOnly.
+pub fn upsert_admin_role(
+	whitelist: &mut Vec<AdminWhitelistEntry>,
+	address: Address,
+	role: AdminRole,
+) {
+	if let Some(entry) = whitelist.iter_mut().find(|entry| entry.address == address) {
+		if role == AdminRole::Admin || entry.role != AdminRole::Admin {
+			entry.role = role;
+		}
+	} else {
+		whitelist.push(AdminWhitelistEntry { address, role });
+	}
+}
+
+impl Default for AdminConfig {
+	fn default() -> Self {
+		Self {
+			enabled: false,
+			domain: String::new(),
+			chain_id: None,
+			nonce_ttl_seconds: default_nonce_ttl(),
+			whitelist: Vec::new(),
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::str::FromStr;
+
+	#[test]
+	fn test_admin_config_is_admin() {
+		let admin_addr = Address::from_str("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").unwrap();
+		let non_admin_addr =
+			Address::from_str("0x70997970C51812dc3A010C7d01b50e0d17dc79C8").unwrap();
+
+		let config = AdminConfig {
+			enabled: true,
+			domain: "solver.example.com".to_string(),
+			chain_id: None,
+			nonce_ttl_seconds: 300,
+			whitelist: vec![AdminWhitelistEntry {
+				address: admin_addr,
+				role: AdminRole::Admin,
+			}],
+		};
+
+		assert!(config.is_admin(&admin_addr));
+		assert!(!config.is_admin(&non_admin_addr));
+	}
+
+	#[test]
+	fn test_admin_config_multiple_admins() {
+		let admin1 = Address::from_str("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").unwrap();
+		let admin2 = Address::from_str("0x70997970C51812dc3A010C7d01b50e0d17dc79C8").unwrap();
+		let non_admin = Address::from_str("0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC").unwrap();
+
+		let config = AdminConfig {
+			enabled: true,
+			domain: "solver.example.com".to_string(),
+			chain_id: None,
+			nonce_ttl_seconds: 300,
+			whitelist: vec![
+				AdminWhitelistEntry {
+					address: admin1,
+					role: AdminRole::Admin,
+				},
+				AdminWhitelistEntry {
+					address: admin2,
+					role: AdminRole::Admin,
+				},
+			],
+		};
+
+		assert!(config.is_admin(&admin1));
+		assert!(config.is_admin(&admin2));
+		assert!(!config.is_admin(&non_admin));
+		assert_eq!(config.admin_count(), 2);
+	}
+
+	#[test]
+	fn test_admin_config_disabled_rejects_all() {
+		// Even if an address is in the admin list, it should be rejected when disabled
+		let admin_addr = Address::from_str("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").unwrap();
+
+		let config = AdminConfig {
+			enabled: false, // Disabled!
+			domain: "solver.example.com".to_string(),
+			chain_id: None,
+			nonce_ttl_seconds: 300,
+			whitelist: vec![AdminWhitelistEntry {
+				address: admin_addr,
+				role: AdminRole::Admin,
+			}],
+		};
+
+		// Should return false because enabled = false
+		assert!(!config.is_admin(&admin_addr));
+	}
+
+	#[test]
+	fn test_admin_config_default() {
+		let config = AdminConfig::default();
+
+		assert!(!config.enabled);
+		assert!(config.domain.is_empty());
+		assert_eq!(config.nonce_ttl_seconds, 300);
+		assert!(config.whitelist.is_empty());
+	}
+
+	#[test]
+	fn test_admin_config_serialization() {
+		let admin_addr = Address::from_str("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").unwrap();
+
+		let config = AdminConfig {
+			enabled: true,
+			domain: "solver.example.com".to_string(),
+			chain_id: Some(1),
+			nonce_ttl_seconds: 600,
+			whitelist: vec![AdminWhitelistEntry {
+				address: admin_addr,
+				role: AdminRole::Admin,
+			}],
+		};
+
+		let json = serde_json::to_string(&config).unwrap();
+		let parsed: AdminConfig = serde_json::from_str(&json).unwrap();
+
+		assert_eq!(parsed.enabled, config.enabled);
+		assert_eq!(parsed.domain, config.domain);
+		assert_eq!(parsed.chain_id, config.chain_id);
+		assert_eq!(parsed.nonce_ttl_seconds, config.nonce_ttl_seconds);
+		assert_eq!(parsed.whitelist, config.whitelist);
+	}
+
+	#[test]
+	fn test_admin_read_scope_semantics() {
+		assert!(AuthScope::AdminAll.grants(&AuthScope::AdminRead));
+		assert!(!AuthScope::AdminRead.grants(&AuthScope::AdminAll));
+		assert_eq!(
+			"admin-read".parse::<AuthScope>().unwrap(),
+			AuthScope::AdminRead
+		);
+		assert_eq!(AuthScope::AdminRead.to_string(), "admin-read");
+	}
+
+	#[test]
+	fn test_normalize_admin_whitelist_admin_wins() {
+		let admin_addr = Address::from_str("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").unwrap();
+		let entries = normalize_admin_whitelist(
+			&[admin_addr],
+			&[AdminWhitelistEntry {
+				address: admin_addr,
+				role: AdminRole::ReadOnly,
+			}],
+		);
+
+		assert_eq!(entries.len(), 1);
+		assert_eq!(entries[0].role, AdminRole::Admin);
+	}
+
+	#[test]
+	fn test_admin_config_deserialization_with_defaults() {
+		let json = r#"{
+			"domain": "solver.example.com",
+			"admin_addresses": ["0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"]
+		}"#;
+
+		let config: AdminConfig = serde_json::from_str(json).unwrap();
+
+		assert!(!config.enabled); // Default
+		assert_eq!(config.nonce_ttl_seconds, 300); // Default
+		assert_eq!(config.domain, "solver.example.com");
+		assert_eq!(config.admin_count(), 1);
+	}
+
+	#[test]
+	fn test_auth_config_with_admin() {
+		let json = r#"{
+			"orders_auth_enabled": true,
+			"jwt_secret": "test-secret-at-least-32-characters-long",
+			"access_token_expiry_hours": 1,
+			"refresh_token_expiry_hours": 720,
+			"issuer": "oif-solver",
+			"admin": {
+				"enabled": true,
+				"domain": "solver.example.com",
+				"admin_addresses": ["0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"]
+			}
+		}"#;
+
+		let config: AuthConfig = serde_json::from_str(json).unwrap();
+
+		assert!(config.admin.is_some());
+		assert!(!config.public_register_enabled);
+		let admin = config.admin.unwrap();
+		assert!(admin.enabled);
+		assert_eq!(admin.domain, "solver.example.com");
+		assert_eq!(admin.admin_count(), 1);
+	}
+
+	#[test]
+	fn test_auth_config_without_admin() {
+		let json = r#"{
+			"orders_auth_enabled": true,
+			"jwt_secret": "test-secret-at-least-32-characters-long",
+			"access_token_expiry_hours": 1,
+			"refresh_token_expiry_hours": 720,
+			"issuer": "oif-solver"
+		}"#;
+
+		let config: AuthConfig = serde_json::from_str(json).unwrap();
+
+		assert!(config.admin.is_none());
+		assert!(!config.public_register_enabled);
+	}
+
+	#[test]
+	fn test_auth_config_with_public_register_enabled() {
+		let json = r#"{
+			"orders_auth_enabled": true,
+			"jwt_secret": "test-secret-at-least-32-characters-long",
+			"access_token_expiry_hours": 1,
+			"refresh_token_expiry_hours": 720,
+			"issuer": "oif-solver",
+			"public_register_enabled": true
+		}"#;
+
+		let config: AuthConfig = serde_json::from_str(json).unwrap();
+
+		assert!(config.public_register_enabled);
+	}
+}

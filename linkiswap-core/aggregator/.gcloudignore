@@ -1,0 +1,30 @@
+# Upload exclusions for `gcloud builds submit`.
+#
+# gcloud does NOT read .dockerignore when packaging the source it sends
+# to Cloud Build — without this the local `target/` directory (~24 GB)
+# is uploaded on every build.
+#
+# Keep this in step with .dockerignore.
+
+.git/
+.gitignore
+
+# Rust build artifacts — rebuilt inside the image.
+target/
+**/target/
+
+# Node artifacts from the bundled demo UI.
+node_modules/
+**/node_modules/
+demo/dist/
+
+# Local environment and editor files.
+.env
+.env.*
+.DS_Store
+.vscode/
+.idea/
+
+# Docs are not needed to build.
+*.md
+docs/

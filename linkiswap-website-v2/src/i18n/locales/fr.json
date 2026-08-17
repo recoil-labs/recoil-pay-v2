@@ -1,0 +1,134 @@
+{
+  "nav": {
+    "how": "Comment ça marche",
+    "marketplace": "Marché",
+    "features": "Fonctionnalités",
+    "vision": "Vision",
+    "roadmap": "Feuille de route",
+    "docs": "Guide d'utilisation",
+    "launchApp": "Lancer l'App",
+    "connectWallet": "Connecter le Wallet"
+  },
+  "hero": {
+    "eyebrow": "Exécution Financière par Intention",
+    "h1Line1": "Dites-nous ce que",
+    "h1Line2": "vous voulez faire.",
+    "h1Gradient": "Nous nous occupons du reste.",
+    "subtitle": "LinkiSwap transforme les transactions blockchain complexes en résultats financiers simples. Achetez, vendez, échangez, envoyez et retirez — sans vous soucier des chaînes, bridges ou gas.",
+    "ctaPrimary": "Lancer l'App",
+    "ctaSecondary": "Explorer V2 →",
+    "trustLine": "12+ chaînes · 0 bridge à gérer · pas de gestion de gas"
+  },
+  "stats": {
+    "volume": "Volume Traité",
+    "chains": "Chaînes Supportées",
+    "settlement": "Règlement Moy.",
+    "solvers": "Solvers par Intention"
+  },
+  "trust": {
+    "built": "Construit sur l'Open Intents Framework"
+  },
+  "problem": {
+    "label": "Le Problème",
+    "h2": "La finance numérique est brisée.",
+    "desc": "Chaque transaction requiert une expertise — choisir les chaînes, gérer les bridges, jongler avec le gas. Cette complexité appartient à l'infrastructure, pas entre vos mains.",
+    "pains": ["Choisir les réseaux", "Bridger les actifs", "Gérer le gas", "Comparer les routes", "Changer d'application", "Suivre les confirmations"]
+  },
+  "solution": {
+    "label": "Le Changement",
+    "h2Line1": "Exprimez ce que vous voulez.",
+    "h2Line2": "Nous gérons le reste.",
+    "beforeLabel": "Avant · L'Ancienne Méthode",
+    "afterLabel": "Après · Dites-le simplement",
+    "before": ["Choisir la chaîne", "Choisir le bridge", "Choisir la route", "Payer le gas", "Exécuter"],
+    "after": ["Envoyer 100 € à Sophie", "Échanger USDC contre ETH", "Retirer sur mon compte", "Acheter une carte cadeau"],
+    "note": "LinkiSwap trouve automatiquement le chemin d'exécution optimal."
+  },
+  "how": {
+    "label": "Comment Ça Marche",
+    "h2": "Construit autour des intentions.",
+    "steps": [
+      { "title": "Créer une intention", "desc": "Dites à LinkiSwap le résultat souhaité — en termes simples." },
+      { "title": "Découvrir l'exécution", "desc": "Le marché trouve le meilleur chemin sur chaque chaîne." },
+      { "title": "Les solvers rivalisent", "desc": "Plusieurs solvers enchérissent pour exécuter votre intention, le plus rapide et le moins cher gagne." },
+      { "title": "Règlement", "desc": "Les actifs arrivent exactement là où ils doivent être." }
+    ]
+  },
+  "market": {
+    "label": "Marché des Solvers",
+    "h2": "Un marché ouvert où l'exécution rivalise pour vous.",
+    "desc": "Chaque intention est diffusée sur un marché compétitif. Les solvers s'affrontent pour offrir la meilleure exécution — vous obtenez toujours l'offre gagnante.",
+    "benefits": ["Meilleurs prix", "Exécution plus rapide", "Liquidité plus profonde", "Plus de fiabilité"],
+    "userIntent": "Intention Utilisateur",
+    "marketplaceLabel": "Marché LinkiSwap",
+    "winner": "✓ La Meilleure Exécution Gagne",
+    "routeNote": "Meilleure route · choisie par les solvers",
+    "solversNote": "●●● 3 solvers en compétition"
+  },
+  "features": {
+    "label": "Une Plateforme",
+    "h2": "Tout ce dont vous avez besoin pour déplacer de l'argent.",
+    "items": [
+      { "title": "Swaps cross-chain", "desc": "Déplacez des actifs entre les écosystèmes blockchain en une étape." },
+      { "title": "Envoyer", "desc": "Transférez de la valeur à n'importe qui, mondialement, sur n'importe quelle chaîne." },
+      { "title": "Acheter et vendre", "desc": "Accédez aux actifs numériques avec des méthodes de paiement familières." },
+      { "title": "Retirer", "desc": "Convertissez des actifs numériques en monnaie locale, vers votre banque." },
+      { "title": "Cartes cadeaux", "desc": "Dépensez des actifs numériques en produits et services du monde réel." },
+      { "title": "Exécution par intention", "desc": "Concentrez-vous sur les résultats — jamais sur l'infrastructure." }
+    ]
+  },
+  "vision": {
+    "label": "La Vision",
+    "h2": "Construire la couche d'exécution financière pour les actifs numériques.",
+    "tagline": "Internet a des moteurs de recherche. · Le cloud a de l'infrastructure. ·",
+    "taglineHighlight": "Les actifs numériques ont besoin d'une couche d'exécution.",
+    "desc": "LinkiSwap est l'infrastructure qui connecte utilisateurs, fournisseurs de liquidités et solvers en un réseau unifié."
+  },
+  "roadmap": {
+    "label": "Feuille de Route",
+    "h2": "Ce qui vient ensuite.",
+    "phases": [
+      { "version": "V1", "status": "LANCÉ", "title": "Agrégation multi-chaînes", "desc": "Swap, envoi, achat et vente — le produit en live." },
+      { "version": "V2", "status": "EN COURS", "title": "Exécution par intention", "desc": "Finance basée sur les résultats sur l'Open Intents Framework." },
+      { "version": "V3", "status": "EN CONCEPTION", "title": "Marché des solvers", "desc": "Compétition ouverte pour chaque exécution." },
+      { "version": "V4", "status": "VISION", "title": "Réseau d'exécution ouvert", "desc": "Une couche financière unifiée et programmable." }
+    ]
+  },
+  "cta": {
+    "h2Line1": "Arrêtez de transiger.",
+    "h2Line2": "Commencez à atteindre vos objectifs.",
+    "desc": "Dites à LinkiSwap ce que vous voulez faire. Nous trouvons comment.",
+    "launchApp": "Lancer l'App",
+    "docs": "Lire la documentation →"
+  },
+  "footer": {
+    "tagline": "Finance propulsée par l'intention",
+    "links": { "app": "App", "docs": "Docs", "solvers": "Solvers", "twitter": "X / Twitter", "github": "GitHub" },
+    "copyright": "© 2026 LinkiSwap"
+  },
+  "intentBar": {
+    "phrases": [
+      "Envoyer 100 € à Sophie",
+      "Échanger USDC contre ETH",
+      "Retirer sur mon compte",
+      "Acheter une carte cadeau de 50 €",
+      "Transférer ETH vers Solana"
+    ]
+  },
+  "widget": {
+    "tabs": { "swap": "Échanger", "send": "Envoyer", "buy": "Acheter", "sell": "Vendre" },
+    "youPay": "Vous payez",
+    "youReceive": "Vous recevez",
+    "youSend": "Vous envoyez",
+    "recipient": "Destinataire",
+    "recipientPlaceholder": "@sophie, ENS, adresse ou e-mail",
+    "sendNote": "Arrive sur la chaîne préférée du destinataire.",
+    "card": "💳 Carte",
+    "cashOutTo": "Retirer vers",
+    "bank": "🏦 Banque · EUR",
+    "routeNote": "Meilleure route · choisie par les solvers",
+    "solversNote": "●●● 3 solvers en compétition",
+    "actionBuy": "Acheter {{token}}",
+    "actionCashOut": "Retirer"
+  }
+}

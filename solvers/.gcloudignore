@@ -1,0 +1,10 @@
+# Upload exclusions for `gcloud builds submit`.
+# gcloud does not read .dockerignore when packaging build sources.
+
+.git/
+node_modules/
+dist/
+.env
+.env.*
+.DS_Store
+*.log

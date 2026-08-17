@@ -1,0 +1,18 @@
+[toolchain]
+
+[features]
+seeds = false
+skip-lint = false
+
+[programs.localnet]
+input_settler = "5N4t4qM6t9tP8KkHwU1o9EHTZtS1W5rV3GfX9vQ5tZ8N"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "Localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

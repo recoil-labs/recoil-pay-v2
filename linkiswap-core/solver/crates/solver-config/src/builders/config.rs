@@ -1,0 +1,219 @@
+//! Configuration builder for creating test and development configurations.
+//!
+//! This module provides utilities for constructing Config instances with
+//! sensible defaults, particularly useful for testing scenarios.
+
+use rust_decimal::Decimal;
+
+use crate::{
+	AccountConfig, ApiConfig, Config, DeliveryConfig, DiscoveryConfig, GasConfig, NetworksConfig,
+	OrderConfig, SettlementConfig, SolverConfig, SolverIngressMode, StorageConfig, StrategyConfig,
+};
+use std::collections::{HashMap, HashSet};
+
+/// Builder for creating `Config` instances with a fluent API.
+///
+/// Provides an easy way to create test configurations with sensible defaults.
+#[derive(Debug, Clone)]
+pub struct ConfigBuilder {
+	solver_id: String,
+	monitoring_timeout_seconds: u64,
+	min_profitability_pct: Decimal,
+	gas_buffer_bps: u32,
+	settlement_fee_buffer_bps: u32,
+	commission_bps: u32,
+	rate_buffer_bps: u32,
+	storage_primary: String,
+	storage_cleanup_interval_seconds: u64,
+	min_confirmations: u64,
+	tx_confirmation_timeout_seconds: u64,
+	account_primary: String,
+	strategy_primary: String,
+	api: Option<ApiConfig>,
+	settlement: Option<SettlementConfig>,
+	networks: Option<NetworksConfig>,
+	deny_list: Option<String>,
+}
+
+impl Default for ConfigBuilder {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
+impl ConfigBuilder {
+	/// Creates a new `ConfigBuilder` with default values suitable for testing.
+	pub fn new() -> Self {
+		Self {
+			solver_id: "test-solver".to_string(),
+			monitoring_timeout_seconds: 60,
+			min_profitability_pct: Decimal::ZERO,
+			gas_buffer_bps: 1000,            // 10% default
+			settlement_fee_buffer_bps: 1000, // 10% default
+			commission_bps: 0,               // Disabled by default for backward compatibility
+			rate_buffer_bps: 14,             // 0.14% default
+			storage_primary: "memory".to_string(),
+			storage_cleanup_interval_seconds: 60,
+			min_confirmations: 1,
+			tx_confirmation_timeout_seconds: 600,
+			account_primary: "local".to_string(),
+			strategy_primary: "simple".to_string(),
+			api: None,
+			settlement: None,
+			networks: None,
+			deny_list: None,
+		}
+	}
+
+	/// Sets the solver ID.
+	pub fn solver_id(mut self, id: String) -> Self {
+		self.solver_id = id;
+		self
+	}
+
+	/// Sets the monitoring timeout in seconds.
+	pub fn monitoring_timeout_seconds(mut self, timeout: u64) -> Self {
+		self.monitoring_timeout_seconds = timeout;
+		self
+	}
+
+	/// Sets commission in basis points.
+	pub fn commission_bps(mut self, commission_bps: u32) -> Self {
+		self.commission_bps = commission_bps;
+		self
+	}
+
+	/// Sets rate buffer in basis points.
+	pub fn rate_buffer_bps(mut self, rate_buffer_bps: u32) -> Self {
+		self.rate_buffer_bps = rate_buffer_bps;
+		self
+	}
+
+	/// Sets the primary storage implementation.
+	pub fn storage_primary(mut self, primary: String) -> Self {
+		self.storage_primary = primary;
+		self
+	}
+
+	/// Sets the storage cleanup interval in seconds.
+	pub fn storage_cleanup_interval_seconds(mut self, interval: u64) -> Self {
+		self.storage_cleanup_interval_seconds = interval;
+		self
+	}
+
+	/// Sets the minimum confirmations for delivery.
+	pub fn min_confirmations(mut self, confirmations: u64) -> Self {
+		self.min_confirmations = confirmations;
+		self
+	}
+
+	/// Sets the tx-confirmation timeout in seconds for the live delivery monitor.
+	pub fn tx_confirmation_timeout_seconds(mut self, secs: u64) -> Self {
+		self.tx_confirmation_timeout_seconds = secs;
+		self
+	}
+
+	/// Sets the primary account implementation.
+	pub fn account_primary(mut self, primary: String) -> Self {
+		self.account_primary = primary;
+		self
+	}
+
+	/// Sets the primary strategy implementation.
+	pub fn strategy_primary(mut self, primary: String) -> Self {
+		self.strategy_primary = primary;
+		self
+	}
+
+	/// Sets the API configuration.
+	pub fn api(mut self, api: Option<ApiConfig>) -> Self {
+		self.api = api;
+		self
+	}
+
+	/// Sets the settlement configuration.
+	pub fn settlement(mut self, settlement: SettlementConfig) -> Self {
+		self.settlement = Some(settlement);
+		self
+	}
+
+	/// Sets the networks configuration.
+	pub fn networks(mut self, networks: NetworksConfig) -> Self {
+		self.networks = Some(networks);
+		self
+	}
+
+	/// Sets the deny list file path.
+	pub fn deny_list(mut self, path: String) -> Self {
+		self.deny_list = Some(path);
+		self
+	}
+
+	/// Sets the minimum profitability percentage.
+	pub fn with_min_profitability_pct(mut self, min_profitability_pct: Decimal) -> Self {
+		self.min_profitability_pct = min_profitability_pct;
+		self
+	}
+
+	/// Builds the `Config` with the configured values.
+	pub fn build(self) -> Config {
+		Config {
+			solver: SolverConfig {
+				id: self.solver_id,
+				min_profitability_pct: self.min_profitability_pct,
+				gas_buffer_bps: self.gas_buffer_bps,
+				settlement_fee_buffer_bps: self.settlement_fee_buffer_bps,
+				commission_bps: self.commission_bps,
+				rate_buffer_bps: self.rate_buffer_bps,
+				monitoring_timeout_seconds: self.monitoring_timeout_seconds,
+				deny_list: self.deny_list,
+				ingress_mode: SolverIngressMode::Active,
+				resource_lock_enabled: false,
+			},
+			networks: self.networks.unwrap_or_default(),
+			storage: StorageConfig {
+				primary: self.storage_primary,
+				implementations: HashMap::new(),
+				cleanup_interval_seconds: self.storage_cleanup_interval_seconds,
+			},
+			delivery: DeliveryConfig {
+				implementations: HashMap::new(),
+				min_confirmations: self.min_confirmations,
+				tx_confirmation_timeout_seconds: self.tx_confirmation_timeout_seconds,
+			},
+			account: AccountConfig {
+				primary: self.account_primary,
+				implementations: HashMap::new(),
+			},
+			discovery: DiscoveryConfig {
+				implementations: HashMap::new(),
+			},
+			order: OrderConfig {
+				implementations: HashMap::new(),
+				strategy: StrategyConfig {
+					primary: self.strategy_primary,
+					implementations: HashMap::new(),
+				},
+				callback_whitelist: Vec::new(),
+				simulate_callbacks: true,
+			},
+			settlement: self.settlement.unwrap_or_else(|| SettlementConfig {
+				implementations: HashMap::new(),
+				primary: String::new(),
+				settlement_poll_interval_seconds: 3,
+			}),
+			pricing: None,
+			api: self.api,
+			gas: Some(GasConfig {
+				flows: HashMap::new(),
+				// Default OFF on the public quote path (audit finding H-05).
+				live_fill_estimate_enabled: false,
+				live_post_fill_estimate_chain_ids: HashSet::new(),
+				max_concurrent_live_fill_estimates_per_chain:
+					crate::DEFAULT_MAX_CONCURRENT_LIVE_FILL_ESTIMATES_PER_CHAIN,
+			}),
+			rebalance: None,
+			tx_bump: crate::TxBumpConfig::default(),
+		}
+	}
+}

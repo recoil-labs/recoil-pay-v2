@@ -1,0 +1,56 @@
+{
+  "solver_id": "oif-solver-demo-ui",
+  "solver_name": "Local Demo Solver",
+  "networks": [
+    {
+      "chain_id": 31337,
+      "name": "anvil-31337",
+      "type": "parent",
+      "tokens": [
+        { "symbol": "TOKA", "name": "TOKA", "address": "0x5fBDB2315678afEcb367F032d93F642f64180aA3", "decimals": 18 },
+        { "symbol": "TOKB", "name": "TOKB", "address": "0xe7F1725e7734cE288F8367E1BB143e90bB3F0512", "decimals": 18 }
+      ],
+      "rpc_urls": ["http://localhost:8545"],
+      "input_settler_address": "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0",
+      "output_settler_address": "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9",
+      "input_settler_compact_address": "0x5fc8d32690cc91d4c39d9d3abcbd16989f875707",
+      "the_compact_address": "0xdc64a140aa3e981100a9beca4e685f962f0cf6c9",
+      "allocator_address": "0x0165878a594ca255338adfa4d48449f69242eb8f"
+    },
+    {
+      "chain_id": 31338,
+      "name": "anvil-31338",
+      "type": "parent",
+      "tokens": [
+        { "symbol": "TOKA", "name": "TOKA", "address": "0x5fBDB2315678afEcb367F032d93F642f64180aA3", "decimals": 18 },
+        { "symbol": "TOKB", "name": "TOKB", "address": "0xe7F1725e7734cE288F8367E1BB143e90bB3F0512", "decimals": 18 }
+      ],
+      "rpc_urls": ["http://localhost:8546"],
+      "input_settler_address": "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0",
+      "output_settler_address": "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9",
+      "input_settler_compact_address": "0x5fc8d32690cc91d4c39d9d3abcbd16989f875707",
+      "the_compact_address": "0xdc64a140aa3e981100a9beca4e685f962f0cf6c9",
+      "allocator_address": "0x0165878a594ca255338adfa4d48449f69242eb8f"
+    }
+  ],
+  "settlement": {
+    "type": "direct",
+    "priority": ["direct"],
+    "direct": {
+      "oracles": {
+        "input": {
+          "31337": ["0xa513e6e4b8f2a923d98304ec87f64353c4d5c853"],
+          "31338": ["0xa513e6e4b8f2a923d98304ec87f64353c4d5c853"]
+        },
+        "output": {
+          "31337": ["0x2279b7a0a67db372996a5fab50d91eaa73d2ebe6"],
+          "31338": ["0x2279b7a0a67db372996a5fab50d91eaa73d2ebe6"]
+        }
+      },
+      "routes": { "31337": [31338], "31338": [31337] },
+      "dispute_period_seconds": 1
+    }
+  },
+  "orders_auth_enabled": false,
+  "resource_lock_enabled": false
+}

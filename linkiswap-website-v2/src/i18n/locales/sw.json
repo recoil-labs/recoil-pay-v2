@@ -1,0 +1,134 @@
+{
+  "nav": {
+    "how": "Jinsi inavyofanya kazi",
+    "marketplace": "Soko",
+    "features": "Vipengele",
+    "vision": "Maono",
+    "roadmap": "Ramani ya Barabara",
+    "docs": "Mwongozo wa Mtumiaji",
+    "launchApp": "Fungua Programu",
+    "connectWallet": "Unganisha Mkoba"
+  },
+  "hero": {
+    "eyebrow": "Utekelezaji wa Fedha kwa Nia",
+    "h1Line1": "Tuambie unachotaka",
+    "h1Line2": "kufanya.",
+    "h1Gradient": "Tutashughulikia mengine.",
+    "subtitle": "LinkiSwap hubadilisha miamala ngumu ya blockchain kuwa matokeo rahisi ya kifedha. Nunua, uza, badilisha, tuma na toa pesa — bila kujali minyororo, madaraja, au gesi.",
+    "ctaPrimary": "Fungua Programu",
+    "ctaSecondary": "Chunguza V2 →",
+    "trustLine": "Minyororo 12+ · Madaraja 0 kudhibiti · hakuna usumbufu wa gesi"
+  },
+  "stats": {
+    "volume": "Kiasi Kilichoshughulikiwa",
+    "chains": "Minyororo Inayoungwa Mkono",
+    "settlement": "Wastani wa Makubaliano",
+    "solvers": "Wasolvers kwa Nia"
+  },
+  "trust": {
+    "built": "Imejengwa kwenye Mfumo wa Open Intents"
+  },
+  "problem": {
+    "label": "Tatizo",
+    "h2": "Fedha za kidijitali zimevunjika.",
+    "desc": "Kila muamala unahitaji ujuzi wa kitaalamu — kuchagua minyororo, kudhibiti madaraja, kushughulikia gesi. Ugumu huu unapaswa kuwepo kwenye miundombinu, si mikononi mwako.",
+    "pains": ["Chagua mitandao", "Daraja mali", "Dhibiti gesi", "Linganisha njia", "Badilisha programu", "Fuatilia uthibitisho"]
+  },
+  "solution": {
+    "label": "Mabadiliko",
+    "h2Line1": "Sema unachotaka.",
+    "h2Line2": "Tutashughulikia mengine.",
+    "beforeLabel": "Kabla · Njia ya Zamani",
+    "afterLabel": "Baada · Sema tu",
+    "before": ["Chagua mnyororo", "Chagua daraja", "Chagua njia", "Lipa gesi", "Tekeleza"],
+    "after": ["Tuma $100 kwa Amina", "Badilisha USDC kwa ETH", "Toa pesa benki", "Nunua kadi ya zawadi"],
+    "note": "LinkiSwap hupata njia bora ya utekelezaji kiotomatiki."
+  },
+  "how": {
+    "label": "Jinsi Inavyofanya Kazi",
+    "h2": "Imejengwa kwa nia.",
+    "steps": [
+      { "title": "Unda nia", "desc": "Mwambie LinkiSwap matokeo unayoyataka — kwa maneno rahisi." },
+      { "title": "Gundua utekelezaji", "desc": "Soko hupata njia bora katika kila mnyororo." },
+      { "title": "Wasolvers washindane", "desc": "Wasolvers wengi wanashindana kutekeleza nia yako, wa haraka na wa bei nafuu." },
+      { "title": "Makubaliano", "desc": "Mali hufika mahali inapohitajika hasa." }
+    ]
+  },
+  "market": {
+    "label": "Soko la Wasolvers",
+    "h2": "Soko wazi ambapo utekelezaji unashindana kwa ajili yako.",
+    "desc": "Kila nia hutangazwa kwenye soko la ushindani. Wasolvers wanashindana kutoa utekelezaji bora — daima unapata zabuni ya ushindi.",
+    "benefits": ["Bei bora", "Utekelezaji wa haraka", "Ukwasi zaidi", "Uaminifu zaidi"],
+    "userIntent": "Nia ya Mtumiaji",
+    "marketplaceLabel": "Soko la LinkiSwap",
+    "winner": "✓ Utekelezaji Bora Ushinde",
+    "routeNote": "Njia bora · iliyochaguliwa na wasolvers",
+    "solversNote": "●●● Wasolvers 3 wanashindana"
+  },
+  "features": {
+    "label": "Jukwaa Moja",
+    "h2": "Kila unachohitaji kuhamisha pesa.",
+    "items": [
+      { "title": "Ubadilishaji wa minyororo", "desc": "Hamisha mali kati ya mifumo ya blockchain kwa hatua moja." },
+      { "title": "Tuma", "desc": "Hamisha thamani kwa mtu yeyote, duniani kote, kwenye mnyororo wowote." },
+      { "title": "Nunua na kuuza", "desc": "Fikia mali za kidijitali kwa njia za kawaida za malipo." },
+      { "title": "Toa pesa", "desc": "Badilisha mali za kidijitali kuwa sarafu ya ndani, kwenye benki yako." },
+      { "title": "Kadi za zawadi", "desc": "Tumia mali za kidijitali kununua bidhaa na huduma za ulimwengu halisi." },
+      { "title": "Utekelezaji wa nia", "desc": "Lenga matokeo — kamwe si miundombinu." }
+    ]
+  },
+  "vision": {
+    "label": "Maono",
+    "h2": "Kujenga tabaka la utekelezaji wa fedha kwa mali za kidijitali.",
+    "tagline": "Mtandao una injini za utafutaji. · Wingu lina miundombinu. ·",
+    "taglineHighlight": "Mali za kidijitali zinahitaji tabaka la utekelezaji.",
+    "desc": "LinkiSwap ni miundombinu inayounganisha watumiaji, watoa ukwasi na wasolvers katika mtandao mmoja uliounganishwa."
+  },
+  "roadmap": {
+    "label": "Ramani ya Barabara",
+    "h2": "Kinachokuja.",
+    "phases": [
+      { "version": "V1", "status": "IMEZINDULIWA", "title": "Ukusanyaji wa minyororo mingi", "desc": "Badilisha, tuma, nunua na uza — bidhaa halisi." },
+      { "version": "V2", "status": "INAENDELEZWA", "title": "Utekelezaji unaotokana na nia", "desc": "Fedha zinazotegemea matokeo kwenye Mfumo wa Open Intents." },
+      { "version": "V3", "status": "INABANIWA", "title": "Soko la wasolvers", "desc": "Ushindani wazi kwa kila utekelezaji." },
+      { "version": "V4", "status": "MAONO", "title": "Mtandao wa utekelezaji wazi", "desc": "Tabaka la fedha lililounganishwa na linaloweza kuprogramiwa." }
+    ]
+  },
+  "cta": {
+    "h2Line1": "Acha kufanya miamala.",
+    "h2Line2": "Anza kufikia matokeo.",
+    "desc": "Mwambie LinkiSwap unachotaka kufanya. Tutafikiri jinsi ya kufanya.",
+    "launchApp": "Fungua Programu",
+    "docs": "Soma nyaraka →"
+  },
+  "footer": {
+    "tagline": "Fedha zinazoendeshwa na nia",
+    "links": { "app": "Programu", "docs": "Nyaraka", "solvers": "Wasolvers", "twitter": "X / Twitter", "github": "GitHub" },
+    "copyright": "© 2026 LinkiSwap"
+  },
+  "intentBar": {
+    "phrases": [
+      "Tuma $100 kwa Amina",
+      "Badilisha USDC kwa ETH",
+      "Toa pesa benki",
+      "Nunua kadi ya zawadi ya $50",
+      "Hamisha ETH kwenda Solana"
+    ]
+  },
+  "widget": {
+    "tabs": { "swap": "Badilisha", "send": "Tuma", "buy": "Nunua", "sell": "Uza" },
+    "youPay": "Unalipa",
+    "youReceive": "Unapokea",
+    "youSend": "Unatuma",
+    "recipient": "Mpokeaji",
+    "recipientPlaceholder": "@amina, ENS, anwani au barua pepe",
+    "sendNote": "Itafika kwenye mnyororo unaopendelewa na mpokeaji.",
+    "card": "💳 Kadi",
+    "cashOutTo": "Toa pesa kwa",
+    "bank": "🏦 Benki · KES",
+    "routeNote": "Njia bora · iliyochaguliwa na wasolvers",
+    "solversNote": "●●● Wasolvers 3 wanashindana",
+    "actionBuy": "Nunua {{token}}",
+    "actionCashOut": "Toa Pesa"
+  }
+}

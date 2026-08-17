@@ -1,0 +1,134 @@
+{
+  "nav": {
+    "how": "使用方法",
+    "marketplace": "交易市场",
+    "features": "功能特性",
+    "vision": "愿景",
+    "roadmap": "路线图",
+    "docs": "用户指南",
+    "launchApp": "启动应用",
+    "connectWallet": "连接钱包"
+  },
+  "hero": {
+    "eyebrow": "意图驱动的金融执行",
+    "h1Line1": "告诉我们您",
+    "h1Line2": "想做什么。",
+    "h1Gradient": "我们来处理其余的一切。",
+    "subtitle": "LinkiSwap 将复杂的区块链交易转化为简单的金融结果。买入、卖出、兑换、转账和提现——无需担心链、桥接或 Gas 费用。",
+    "ctaPrimary": "启动应用",
+    "ctaSecondary": "探索 V2 →",
+    "trustLine": "12+ 条链 · 0 个需要管理的桥接 · 无需操心 Gas"
+  },
+  "stats": {
+    "volume": "处理交易量",
+    "chains": "支持链数",
+    "settlement": "平均结算时间",
+    "solvers": "每笔意图的求解器数"
+  },
+  "trust": {
+    "built": "基于 Open Intents Framework 构建"
+  },
+  "problem": {
+    "label": "问题所在",
+    "h2": "数字金融已然破碎。",
+    "desc": "每笔交易都需要专业知识——选择链、管理桥接、计算 Gas。这种复杂性本该属于基础设施，而不是您的负担。",
+    "pains": ["选择网络", "资产跨链", "管理 Gas", "比较路由", "切换应用", "追踪确认"]
+  },
+  "solution": {
+    "label": "转变之道",
+    "h2Line1": "表达您想要的。",
+    "h2Line2": "我们来处理其余的。",
+    "beforeLabel": "以前 · 旧的方式",
+    "afterLabel": "现在 · 只需说出来",
+    "before": ["选择链", "选择桥接", "选择路由", "支付 Gas", "执行"],
+    "after": ["向小明转账 $100", "将 USDC 兑换为 ETH", "提现到我的银行", "购买礼品卡"],
+    "note": "LinkiSwap 自动找到最优执行路径。"
+  },
+  "how": {
+    "label": "使用方法",
+    "h2": "围绕意图构建。",
+    "steps": [
+      { "title": "创建意图", "desc": "用简单的语言告诉 LinkiSwap 您想要的结果。" },
+      { "title": "发现执行路径", "desc": "市场在每条链上找到最佳路径。" },
+      { "title": "求解器竞争", "desc": "多个求解器竞价执行您的意图，最快最便宜者胜出。" },
+      { "title": "结算完成", "desc": "资产准确到达目标位置。" }
+    ]
+  },
+  "market": {
+    "label": "求解器市场",
+    "h2": "一个为您竞争执行的开放市场。",
+    "desc": "每个意图都会广播到竞争性市场。求解器竞相提供最佳执行——您始终获得最优报价。",
+    "benefits": ["更优价格", "更快执行", "更深流动性", "更高可靠性"],
+    "userIntent": "用户意图",
+    "marketplaceLabel": "LinkiSwap 市场",
+    "winner": "✓ 最优执行胜出",
+    "routeNote": "最优路由 · 由求解器选定",
+    "solversNote": "●●● 3 个求解器竞争中"
+  },
+  "features": {
+    "label": "一体化平台",
+    "h2": "您转移资金所需的一切。",
+    "items": [
+      { "title": "跨链兑换", "desc": "一步在区块链生态系统之间转移资产。" },
+      { "title": "转账", "desc": "在任何链上向全球任何人转移价值。" },
+      { "title": "买卖", "desc": "使用熟悉的支付方式获取数字资产。" },
+      { "title": "提现", "desc": "将数字资产转换为本地货币，转入您的银行账户。" },
+      { "title": "礼品卡", "desc": "用数字资产购买现实世界的产品和服务。" },
+      { "title": "意图执行", "desc": "专注于结果——而非基础设施。" }
+    ]
+  },
+  "vision": {
+    "label": "愿景",
+    "h2": "为数字资产构建金融执行层。",
+    "tagline": "互联网有搜索引擎。· 云计算有基础设施。·",
+    "taglineHighlight": "数字资产需要一个执行层。",
+    "desc": "LinkiSwap 是将用户、流动性提供者和求解器连接到一个统一网络的基础设施。"
+  },
+  "roadmap": {
+    "label": "路线图",
+    "h2": "接下来是什么。",
+    "phases": [
+      { "version": "V1", "status": "已发布", "title": "多链聚合", "desc": "兑换、转账、买入和卖出——实时产品。" },
+      { "version": "V2", "status": "开发中", "title": "意图驱动执行", "desc": "基于 Open Intents Framework 的结果导向金融。" },
+      { "version": "V3", "status": "设计中", "title": "求解器市场", "desc": "每次执行的开放竞争。" },
+      { "version": "V4", "status": "愿景", "title": "开放执行网络", "desc": "统一、可编程的金融层。" }
+    ]
+  },
+  "cta": {
+    "h2Line1": "停止繁琐交易。",
+    "h2Line2": "开始实现目标。",
+    "desc": "告诉 LinkiSwap 您想做什么。我们来解决如何做。",
+    "launchApp": "启动应用",
+    "docs": "阅读文档 →"
+  },
+  "footer": {
+    "tagline": "意图驱动的金融",
+    "links": { "app": "应用", "docs": "文档", "solvers": "求解器", "twitter": "X / Twitter", "github": "GitHub" },
+    "copyright": "© 2026 LinkiSwap"
+  },
+  "intentBar": {
+    "phrases": [
+      "向小明转账 $100",
+      "将 USDC 兑换为 ETH",
+      "提现到我的银行",
+      "购买 $50 礼品卡",
+      "将 ETH 桥接到 Solana"
+    ]
+  },
+  "widget": {
+    "tabs": { "swap": "兑换", "send": "转账", "buy": "买入", "sell": "卖出" },
+    "youPay": "您支付",
+    "youReceive": "您收到",
+    "youSend": "您发送",
+    "recipient": "收款方",
+    "recipientPlaceholder": "@小明，ENS，地址或邮箱",
+    "sendNote": "将到达收款方首选的链上。",
+    "card": "💳 银行卡",
+    "cashOutTo": "提现至",
+    "bank": "🏦 银行 · 人民币",
+    "routeNote": "最优路由 · 由求解器选定",
+    "solversNote": "●●● 3 个求解器竞争中",
+    "actionBuy": "买入 {{token}}",
+    "actionCashOut": "提现"
+  }
+}

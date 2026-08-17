@@ -1,0 +1,430 @@
+//! Event types for inter-service communication.
+//!
+//! This module defines the event system used by the solver for asynchronous
+//! communication between different components. Events flow through an event bus
+//! allowing services to react to state changes in other parts of the system.
+
+use crate::{
+	Address, ExecutionParams, FillProof, Intent, Order, TransactionAttemptStatus, TransactionHash,
+	TransactionReceipt,
+};
+use serde::{Deserialize, Serialize};
+use std::time::Duration;
+
+/// Main event type encompassing all solver events.
+///
+/// Events are categorized by the service that produces them, allowing
+/// consumers to filter and handle specific event types.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
+pub enum SolverEvent {
+	/// Events from the discovery service.
+	Discovery(DiscoveryEvent),
+	/// Events from the order processing service.
+	Order(OrderEvent),
+	/// Events from the delivery service.
+	Delivery(DeliveryEvent),
+	/// Events from the settlement service.
+	Settlement(SettlementEvent),
+}
+
+/// Events related to intent discovery.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
+pub enum DiscoveryEvent {
+	/// A new intent has been discovered.
+	IntentDiscovered { intent: Intent },
+	/// An intent has been validated and converted to an order.
+	IntentValidated { intent_id: String, order: Order },
+	/// An intent has been rejected during validation.
+	IntentRejected { intent_id: String, reason: String },
+}
+
+/// Events related to order processing.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
+pub enum OrderEvent {
+	/// An order is being prepared for execution (e.g., openFor for off-chain orders).
+	Preparing {
+		intent: Intent,
+		order: Order,
+		params: ExecutionParams,
+	},
+	/// An order is being executed with the specified parameters.
+	Executing {
+		order: Order,
+		params: ExecutionParams,
+	},
+	/// An order has been skipped due to strategy decision.
+	Skipped { order_id: String, reason: String },
+	/// An order execution has been deferred.
+	Deferred {
+		order_id: String,
+		retry_after: Duration,
+	},
+}
+
+/// Events related to transaction delivery.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum DeliveryEvent {
+	/// A transaction has been submitted and is pending confirmation.
+	TransactionPending {
+		order_id: String,
+		tx_hash: TransactionHash,
+		tx_type: TransactionType,
+		tx_chain_id: u64,
+	},
+	/// A transaction has been confirmed on-chain.
+	TransactionConfirmed {
+		order_id: String,
+		tx_hash: TransactionHash,
+		tx_type: TransactionType,
+		receipt: TransactionReceipt,
+	},
+	/// A transaction has failed.
+	TransactionFailed {
+		order_id: String,
+		tx_hash: TransactionHash,
+		tx_type: TransactionType,
+		error: String,
+	},
+	/// Emitted when the live tx-confirmation monitor gives up before
+	/// reaching `min_confirmations`. Order stays in its current status;
+	/// recovery reconciles via direct chain query.
+	TransactionIndeterminate {
+		order_id: String,
+		tx_hash: TransactionHash,
+		tx_type: TransactionType,
+		reason: String,
+	},
+	/// A duplicate confirmation observed a different canonical hash than
+	/// the one already stored for this stage. The stored hash is preserved.
+	TransactionCanonicalHashConflict {
+		order_id: String,
+		tx_type: TransactionType,
+		stored_hash: TransactionHash,
+		observed_hash: TransactionHash,
+	},
+	/// The attempt ledger rejected a chain-truth update, usually because a
+	/// concurrent path had already terminalized the attempt.
+	TransactionAttemptLedgerConflict {
+		order_id: String,
+		attempt_id: String,
+		tx_type: TransactionType,
+		tx_hash: Option<TransactionHash>,
+		attempted_status: TransactionAttemptStatus,
+		error: String,
+		context: String,
+	},
+	/// Bump sweeper found that the bumped fees exceed a per-chain cap.
+	/// Operator intervention required (raise the cap or wait).
+	BumpCapReached {
+		order_id: String,
+		attempt_id: String,
+		chain_id: u64,
+		tx_type: TransactionType,
+		cap_field: BumpCapField,
+		computed_fee_wei: String,
+		cap_wei: String,
+	},
+	/// Bump sweeper found that the proposed bumped transaction's total cost
+	/// exceeds the available profitability headroom (gas_buffer + min_profit)
+	/// over the stage's original quote-time gas budget. Operator intervention
+	/// required (raise headroom or accept loss).
+	BumpExceedsProfitability {
+		order_id: String,
+		attempt_id: String,
+		chain_id: u64,
+		tx_type: TransactionType,
+		/// Proposed total cost of the bumped tx, in `currency`.
+		/// Decimal string for serde stability (mirrors `CostBreakdown` fields).
+		proposed_cost: String,
+		/// The stage's original quote-time gas budget, in `currency`.
+		original_stage_budget: String,
+		/// Available headroom (gas_buffer + min_profit), in `currency`.
+		headroom: String,
+		/// Currency code from the order's CostBreakdown (e.g., "USD").
+		currency: String,
+	},
+	/// Bump sweeper found that the lineage has reached the configured
+	/// max-replacements limit. Operator intervention required.
+	BumpMaxReplacementsReached {
+		order_id: String,
+		attempt_id: String,
+		chain_id: u64,
+		tx_type: TransactionType,
+		lineage_depth: u32,
+	},
+	/// Bump sweeper skipped a replacement because the on-chain deadline has
+	/// already passed — any new tx at this stage will revert regardless of
+	/// fee. For `Fill`, the deadline is `fillDeadline`; for `Claim`, it is
+	/// the order `expires`. Operator-visible signal that the stuck lineage
+	/// will resolve via refund or whatever in-flight tx happens to mine.
+	BumpDeadlineExpired {
+		order_id: String,
+		attempt_id: String,
+		chain_id: u64,
+		tx_type: TransactionType,
+		current_time: u64,
+		deadline: u64,
+	},
+	/// Bump sweeper found that the chain's currently-configured signer
+	/// no longer matches the original signer of the lineage tip.
+	/// Same-signer invariant prevents bumping.
+	BumpSignerMismatch {
+		order_id: String,
+		attempt_id: String,
+		chain_id: u64,
+		tx_type: TransactionType,
+		expected_signer: Address,
+		submission_signer: Address,
+	},
+	/// Bump sweeper found a non-terminal lineage tip whose `signer`
+	/// field is `None`. Abnormal for EVM attempts.
+	BumpMissingSigner {
+		order_id: String,
+		attempt_id: String,
+		chain_id: u64,
+		tx_type: TransactionType,
+	},
+	BumpSubmissionSignerUnavailable {
+		order_id: String,
+		attempt_id: String,
+		chain_id: u64,
+		tx_type: TransactionType,
+	},
+	BumpMissingNonce {
+		order_id: String,
+		attempt_id: String,
+		chain_id: u64,
+		tx_type: TransactionType,
+	},
+	BumpBalanceCheckSkipped {
+		order_id: String,
+		attempt_id: String,
+		chain_id: u64,
+		tx_type: TransactionType,
+		reason: String,
+	},
+	BumpReceiptPreflightSkipped {
+		order_id: String,
+		attempt_id: String,
+		chain_id: u64,
+		tx_type: TransactionType,
+		tx_hash: TransactionHash,
+		error: String,
+		fail_closed: bool,
+	},
+	BumpSubmitFailed {
+		order_id: String,
+		parent_attempt_id: String,
+		chain_id: u64,
+		tx_type: TransactionType,
+		error: String,
+	},
+	BumpTipAlreadyMined {
+		order_id: String,
+		attempt_id: String,
+		chain_id: u64,
+		tx_type: TransactionType,
+		tx_hash: TransactionHash,
+		success: bool,
+	},
+	/// Bump sweeper's profitability gate could not run a strict check for
+	/// this attempt — emitted from each fail-open branch of
+	/// `should_skip_for_profitability`. The boolean return (proceed vs.
+	/// skip) is controlled by the per-chain `profitability_gate_fail_closed`
+	/// flag; the event fires regardless of mode so operators can alert on
+	/// a non-zero rate of unverified bumps.
+	BumpProfitabilityCheckSkipped {
+		order_id: String,
+		attempt_id: String,
+		chain_id: u64,
+		tx_type: TransactionType,
+		/// Short, human-readable explanation of which branch fired.
+		/// Stable values: "order not found", "no quote_id",
+		/// "stored quote lookup failed", "tip gas_limit missing",
+		/// "bumped fees missing", "wei_to_currency error",
+		/// "decimal parse error".
+		reason: String,
+	},
+}
+
+/// Which EIP-1559 cap was the binding constraint on a blocked bump.
+/// Legacy chains report `MaxFeePerGas` (gas_price cap).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BumpCapField {
+	MaxFeePerGas,
+	MaxPriorityFeePerGas,
+}
+
+/// Events related to settlement operations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SettlementEvent {
+	/// A fill transaction has been detected on-chain.
+	FillDetected {
+		order_id: String,
+		tx_hash: TransactionHash,
+	},
+	/// Fill proof has been generated and is ready.
+	ProofReady { order_id: String, proof: FillProof },
+	/// Emitted after Fill confirmation to trigger post-fill processing.
+	PostFillReady { order_id: String },
+	/// Emitted when ready for pre-claim processing.
+	PreClaimReady { order_id: String },
+	/// Start monitoring for settlement readiness.
+	StartMonitoring {
+		order_id: String,
+		fill_tx_hash: TransactionHash,
+	},
+	/// Order is ready to be claimed.
+	ClaimReady { order_id: String },
+	/// Order settlement has been completed.
+	Completed { order_id: String },
+}
+
+/// Types of transactions in the solver system.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub enum TransactionType {
+	/// Transaction that prepares an off-chain order on-chain (e.g., openFor).
+	Prepare,
+	/// Transaction that fills an order on the destination chain.
+	Fill,
+	/// Transaction that executes after fill confirmation (optional).
+	PostFill,
+	/// Transaction that executes before claiming (optional).
+	PreClaim,
+	/// Transaction that claims rewards on the origin chain.
+	Claim,
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn bump_exceeds_profitability_event_round_trips() {
+		let ev = DeliveryEvent::BumpExceedsProfitability {
+			order_id: "order-1".into(),
+			attempt_id: "attempt-1".into(),
+			chain_id: 1,
+			tx_type: TransactionType::Fill,
+			proposed_cost: "1.50".into(),
+			original_stage_budget: "0.10".into(),
+			headroom: "0.09".into(),
+			currency: "USD".into(),
+		};
+		let json = serde_json::to_string(&ev).unwrap();
+		let de: DeliveryEvent = serde_json::from_str(&json).unwrap();
+		assert!(matches!(de, DeliveryEvent::BumpExceedsProfitability { .. }));
+	}
+
+	#[test]
+	fn canonical_hash_conflict_event_round_trips() {
+		let ev = DeliveryEvent::TransactionCanonicalHashConflict {
+			order_id: "order-1".into(),
+			tx_type: TransactionType::Fill,
+			stored_hash: TransactionHash(vec![0x33; 32]),
+			observed_hash: TransactionHash(vec![0x44; 32]),
+		};
+		let json = serde_json::to_string(&ev).unwrap();
+		let de: DeliveryEvent = serde_json::from_str(&json).unwrap();
+		assert!(matches!(
+			de,
+			DeliveryEvent::TransactionCanonicalHashConflict { .. }
+		));
+	}
+
+	#[test]
+	fn attempt_ledger_conflict_event_round_trips() {
+		let ev = DeliveryEvent::TransactionAttemptLedgerConflict {
+			order_id: "order-1".into(),
+			attempt_id: "attempt-1".into(),
+			tx_type: TransactionType::Fill,
+			tx_hash: Some(TransactionHash(vec![0x55; 32])),
+			attempted_status: TransactionAttemptStatus::Confirmed,
+			error: "terminal attempt".into(),
+			context: "monitor confirmed".into(),
+		};
+		let json = serde_json::to_string(&ev).unwrap();
+		let de: DeliveryEvent = serde_json::from_str(&json).unwrap();
+		assert!(matches!(
+			de,
+			DeliveryEvent::TransactionAttemptLedgerConflict { .. }
+		));
+	}
+
+	#[test]
+	fn bump_sweeper_observability_events_round_trip() {
+		macro_rules! assert_round_trip {
+			($event:expr, $pattern:pat) => {{
+				let json = serde_json::to_string(&$event).unwrap();
+				let de: DeliveryEvent = serde_json::from_str(&json).unwrap();
+				assert!(matches!(de, $pattern));
+			}};
+		}
+
+		assert_round_trip!(
+			DeliveryEvent::BumpSubmissionSignerUnavailable {
+				order_id: "order-1".into(),
+				attempt_id: "attempt-1".into(),
+				chain_id: 1,
+				tx_type: TransactionType::Fill,
+			},
+			DeliveryEvent::BumpSubmissionSignerUnavailable { .. }
+		);
+		assert_round_trip!(
+			DeliveryEvent::BumpMissingNonce {
+				order_id: "order-1".into(),
+				attempt_id: "attempt-1".into(),
+				chain_id: 1,
+				tx_type: TransactionType::Fill,
+			},
+			DeliveryEvent::BumpMissingNonce { .. }
+		);
+		assert_round_trip!(
+			DeliveryEvent::BumpBalanceCheckSkipped {
+				order_id: "order-1".into(),
+				attempt_id: "attempt-1".into(),
+				chain_id: 1,
+				tx_type: TransactionType::Fill,
+				reason: "balance RPC error".into(),
+			},
+			DeliveryEvent::BumpBalanceCheckSkipped { .. }
+		);
+		assert_round_trip!(
+			DeliveryEvent::BumpReceiptPreflightSkipped {
+				order_id: "order-1".into(),
+				attempt_id: "attempt-1".into(),
+				chain_id: 1,
+				tx_type: TransactionType::Fill,
+				tx_hash: TransactionHash(vec![0x11; 32]),
+				error: "receipt RPC error".into(),
+				fail_closed: true,
+			},
+			DeliveryEvent::BumpReceiptPreflightSkipped { .. }
+		);
+		assert_round_trip!(
+			DeliveryEvent::BumpSubmitFailed {
+				order_id: "order-1".into(),
+				parent_attempt_id: "attempt-1".into(),
+				chain_id: 1,
+				tx_type: TransactionType::Fill,
+				error: "submit failed".into(),
+			},
+			DeliveryEvent::BumpSubmitFailed { .. }
+		);
+		assert_round_trip!(
+			DeliveryEvent::BumpTipAlreadyMined {
+				order_id: "order-1".into(),
+				attempt_id: "attempt-1".into(),
+				chain_id: 1,
+				tx_type: TransactionType::Fill,
+				tx_hash: TransactionHash(vec![0x22; 32]),
+				success: true,
+			},
+			DeliveryEvent::BumpTipAlreadyMined { success: true, .. }
+		);
+	}
+}

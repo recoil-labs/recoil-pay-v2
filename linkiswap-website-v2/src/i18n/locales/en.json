@@ -1,0 +1,205 @@
+{
+  "nav": {
+    "how": "How it works",
+    "marketplace": "Marketplace",
+    "features": "Features",
+    "vision": "Vision",
+    "roadmap": "Roadmap",
+    "blog": "Blog",
+    "docs": "User Guide",
+    "launchApp": "Launch App",
+    "connectWallet": "Connect Wallet",
+    "selectLanguage": "Select language",
+    "chooseLanguage": "Choose language",
+    "lightMode": "Light mode",
+    "darkMode": "Dark mode",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "wrongNetwork": "Wrong network",
+    "switchNetwork": "Wrong network, switch network",
+    "unknownNetwork": "Unknown",
+    "currentNetwork": "Switch network, current: {{network}}",
+    "openWallet": "Account {{account}}, open wallet"
+  },
+  "hero": {
+    "eyebrow": "Intent-based cross-chain finance",
+    "h1Line1": "Talk to your",
+    "h1Line2": "wallet",
+    "h1Gradient": "AI handles the rest",
+    "subtitle": "Type what you want in plain English. We route it across chains no bridges to babysit, no gas to juggle",
+    "ctaPrimary": "Launch App",
+    "ctaSecondary": "Explore V2 →",
+    "trustLine": "AI-parsed intents · 12+ chains · zero bridges · no gas juggling"
+  },
+  "stats": {
+    "volume": "Volume Processed",
+    "chains": "Chains Supported",
+    "settlement": "Avg. Settlement",
+    "solvers": "Solvers per Intent"
+  },
+  "trust": {
+    "built": "Built on the Open Intents Framework"
+  },
+  "problem": {
+    "label": "The Problem",
+    "h2": "Digital finance is broken",
+    "desc": "Every transaction requires expert knowledge — picking chains, managing bridges, juggling gas. It's complexity that belongs in infrastructure, not in your hands.",
+    "pains": ["Choose networks", "Bridge assets", "Manage gas", "Compare routes", "Switch applications", "Track confirmations"]
+  },
+  "solution": {
+    "label": "The Shift",
+    "h2Line1": "Say what you want",
+    "h2Line2": "We route it, price it, execute it",
+    "beforeLabel": "Before",
+    "afterLabel": "After",
+    "before": ["Choose chain", "Choose bridge", "Choose route", "Pay gas", "Execute"],
+    "after": ["Send $100 to Sarah", "Swap USDC for ETH", "Cash out to my bank", "Buy a gift card"],
+    "note": "LinkiSwap finds the optimal execution path automatically"
+  },
+  "how": {
+    "label": "How It Works",
+    "h2": "Built around intents",
+    "steps": [
+      { "title": "Create intent", "desc": "Tell LinkiSwap the outcome you want in plain terms." },
+      { "title": "Discover execution", "desc": "The marketplace finds the best path across supported chains." },
+      { "title": "Solvers compete", "desc": "Multiple solvers bid to fulfill your intent, fastest and cheapest." },
+      { "title": "Settlement", "desc": "Assets arrive exactly where they need to be." }
+    ]
+  },
+  "tour": {
+    "label": "Product tour",
+    "h2": "See it in action",
+    "subtitle": "Quick demos of send, swap, buy, and sell — pick a tab to watch the flow",
+    "overviewLabel": "Overview",
+    "tabs": {
+      "send": {
+        "title": "Send",
+        "desc": "Send funds across chains quickly and securely — connect a wallet, enter the recipient, and confirm."
+      },
+      "swap": {
+        "title": "Swap",
+        "desc": "Swap tokens across multiple chains with real-time quotes and intuitive routing."
+      },
+      "buy": {
+        "title": "Buy",
+        "desc": "Buy crypto using integrated on-ramps with clear prompts and secure flows."
+      },
+      "sell": {
+        "title": "Sell",
+        "desc": "Sell crypto to supported destinations with step-by-step guidance and confirmations."
+      }
+    }
+  },
+  "market": {
+    "label": "Solver Marketplace",
+    "h2": "An open market where execution competes for you",
+    "desc": "Every intent is broadcast to a competitive marketplace. Solvers race to offer the best execution you always get the winning bid.",
+    "benefits": ["Better pricing", "Faster execution", "Deeper liquidity", "More reliability"],
+    "userIntent": "User Intent",
+    "marketplaceLabel": "LinkiSwap Marketplace",
+    "winner": "✓ Best Execution Wins",
+    "routeNote": "Best route, chosen by solvers",
+    "solversNote": "●●● 3 solvers competing"
+  },
+  "features": {
+    "label": "One Platform",
+    "h2": "Everything you need to move money",
+    "items": [
+      { "title": "Cross-chain swaps", "desc": "Move assets across blockchain ecosystems in one step." },
+      { "title": "Send", "desc": "Transfer value to anyone, globally, on any chain." },
+      { "title": "Buy and sell", "desc": "Access digital assets with familiar payment methods." },
+      { "title": "Cash out", "desc": "Convert digital assets into local currency, to your bank." },
+      { "title": "Gift cards", "desc": "Spend digital assets on real-world products and services." },
+      { "title": "Intent execution", "desc": "Focus on outcomes, never on infrastructure." }
+    ]
+  },
+  "networks": {
+    "h2": "Supported networks",
+    "subtitle": "LinkiSwap integrates with a wide range of chains and ecosystems"
+  },
+  "prices": {
+    "h2": "Live Cryptocurrency Prices by Market Cap",
+    "headers": {
+      "coin": "Coin",
+      "price": "Price",
+      "change1h": "1h",
+      "change24h": "24h"
+    },
+    "prev": "Previous page",
+    "next": "Next page",
+    "pageOf": "Page {{current}} of {{total}}",
+    "error": "Couldn't load market data. It'll retry automatically."
+  },
+  "vision": {
+    "label": "The Vision",
+    "h2": "Building the financial execution layer for digital assets",
+    "tagline": "The internet has search engines The cloud has infrastructure",
+    "taglineHighlight": "Digital assets need an execution layer",
+    "desc": "LinkiSwap is the infrastructure that connects users, liquidity providers and solvers into one unified network"
+  },
+  "roadmap": {
+    "label": "Roadmap",
+    "h2": "What's next",
+    "phases": [
+      { "version": "V1", "status": "SHIPPED", "title": "Multi-chain aggregation", "desc": "Swap, send, buy, and sell in the live product." },
+      { "version": "V2", "status": "BUILDING NOW", "title": "Intent-powered execution", "desc": "Outcome-based finance on the Open Intents Framework." },
+      { "version": "V3", "status": "DESIGNING", "title": "Solver marketplace", "desc": "Open competition for every execution." },
+      { "version": "V4", "status": "VISION", "title": "Open execution network", "desc": "A unified, programmable financial layer." }
+    ]
+  },
+  "blog": {
+    "label": "Blog",
+    "h2": "Insights, updates and product stories",
+    "subtitle": "Stay current with LinkiSwap news, launch notes and cross-chain strategy guides",
+    "viewMore": "View More",
+    "comingSoonH3": "Coming soon",
+    "comingSoonDesc": "New posts are on the way. Subscribe below to get them the moment they publish.",
+    "newsletterHeading": "Get exclusive swapping strategies before everyone else",
+    "newsletterPlaceholder": "Enter your email",
+    "newsletterCta": "Subscribe",
+    "newsletterSubmitting": "Subscribing…"
+  },
+  "cta": {
+    "h2Line1": "Stop juggling wallets and bridges",
+    "h2Line2": "Start typing what you want",
+    "desc": "Tell LinkiSwap what you want to do. We'll figure out how",
+    "launchApp": "Launch App",
+    "docs": "Read the docs"
+  },
+  "footer": {
+    "tagline": "Intent-powered finance",
+    "links": { "app": "App", "docs": "Docs", "solvers": "Solvers", "twitter": "X / Twitter", "github": "GitHub" },
+    "copyright": "Copyright 2026 LinkiSwap"
+  },
+  "intentBar": {
+    "phrases": [
+      "Send $100 to Sarah",
+      "Swap USDC for ETH",
+      "Cash out to my bank",
+      "Buy a $50 gift card",
+      "Bridge ETH to Solana"
+    ]
+  },
+  "tokenInput": {
+    "amount": "{{token}} amount",
+    "selectToken": "Select token",
+    "chooseToken": "Choose token",
+    "chooseTokenDesc": "Pick the asset you want to use for this intent."
+  },
+  "widget": {
+    "tabs": { "swap": "Swap", "send": "Send", "buy": "Buy", "sell": "Sell" },
+    "youPay": "You pay",
+    "youReceive": "You receive",
+    "youSend": "You send",
+    "recipient": "Recipient",
+    "recipientPlaceholder": "@sarah, ENS, address or email",
+    "sendNote": "Arrives on the recipient's preferred chain.",
+    "card": "Card",
+    "cashOutTo": "Cash out to",
+    "bank": "🏦 Bank  USD",
+    "routeNote": "Best route, chosen by solvers",
+    "solversNote": "●●● 3 solvers competing",
+    "actionBuy": "Buy {{token}}",
+    "actionCashOut": "Cash Out"
+  }
+}

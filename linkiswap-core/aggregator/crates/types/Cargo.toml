@@ -1,0 +1,41 @@
+[package]
+name = "oif-types"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.18", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2.0"
+url = "2.5"
+async-trait = "0.1"
+reqwest = { version = "0.12", features = ["json"] }
+dashmap = "6.1"
+base64 = "0.22"
+rand = { version = "0.9", features = ["std"] }
+tracing = "0.1"
+zeroize = { version = "1.8", features = ["derive"] }
+utoipa = { version = "5.0", optional = true, features = ["chrono", "uuid"] }
+hex = "0.4"
+# Pure secp256k1 for the operator hot-wallet keygen helper. We use k256
+# directly (not alloy) to keep oif-types lightweight; the helper lives in
+# `crate::keygen` and is consumed by both the aggregator endpoint and the
+# dashboard's "Generate Key" flow.
+k256 = { version = "0.13", features = ["ecdsa", "std"] }
+sha3 = "0.10"
+# `getrandom` (no version skew with `rand_core`) provides the OS entropy
+# source used to seed the secp256k1 scalar. Avoids pulling `rand_core`
+# version pinning headaches.
+getrandom = "0.2"
+# AES-256-GCM for at-rest encryption of operator fill-wallet private keys.
+# The aggregator generates each operator's fill-wallet, encrypts the
+# private key with a process-held master key, and stores the ciphertext
+# in Postgres. Decryption happens only inside the aggregator process
+# during fill signing — the key never leaves the host.
+aes-gcm = "0.10"
+
+[features]
+openapi = ["dep:utoipa"]

@@ -1,0 +1,53 @@
+[package]
+name = "solver-delivery"
+version = "0.1.0"
+edition = "2021"
+rust-version.workspace = true
+
+[features]
+testing = ["mockall"]
+solana  = [
+	"solana-client",
+	"solana-sdk",
+	"solana-transaction-status",
+	"spl-token",
+	"spl-associated-token-account",
+	"bs58",
+	"solver-account/solana",
+]
+
+[dependencies]
+alloy-consensus = { workspace = true }
+alloy-network = { workspace = true }
+alloy-primitives = { workspace = true }
+alloy-provider = { workspace = true }
+alloy-rpc-client = { workspace = true }
+alloy-rpc-types = { workspace = true }
+alloy-signer = { workspace = true }
+alloy-signer-local = { workspace = true }
+alloy-sol-types = { workspace = true }
+alloy-transport = { workspace = true }
+alloy-transport-http = { workspace = true }
+async-trait = "0.1"
+hex = "0.4"
+mockall = { workspace = true, optional = true }
+reqwest = "0.12"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+solver-account = { path = "../solver-account" }
+solver-types = { path = "../solver-types" }
+thiserror = "2.0.17"
+tokio = { version = "1.0", features = ["rt-multi-thread"] }
+tracing = "0.1"
+
+# ── Solana optional deps ───────────────────────────────────────────────────────
+bs58                        = { workspace = true, optional = true }
+solana-client               = { workspace = true, optional = true }
+solana-sdk                  = { workspace = true, optional = true }
+solana-transaction-status   = { workspace = true, optional = true }
+spl-token                   = { workspace = true, optional = true }
+spl-associated-token-account = { workspace = true, optional = true }
+
+[dev-dependencies]
+alloy-json-rpc = "1.0.37"
+proptest = "1"

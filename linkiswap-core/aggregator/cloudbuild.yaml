@@ -1,0 +1,34 @@
+# Cloud Build config for the aggregator image.
+#
+# BuildKit is required, not optional: the Dockerfile uses
+# `--platform=${BUILDPLATFORM}` and `--mount=type=cache`, both of which
+# are BuildKit features. Cloud Build's default `docker build` invocation
+# runs the legacy builder, which leaves BUILDPLATFORM empty and fails at
+# the first FROM.
+#
+# The image contains BOTH binaries (oif-aggregator, fill-worker); the
+# two Cloud Run services differ only by their entrypoint command.
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    env:
+      - DOCKER_BUILDKIT=1
+    args:
+      - -c
+      - |
+        docker build \
+          --build-arg BUILDPLATFORM=linux/amd64 \
+          -t us-central1-docker.pkg.dev/$PROJECT_ID/linkiswap/core:latest \
+          -f Dockerfile .
+
+images:
+  - us-central1-docker.pkg.dev/$PROJECT_ID/linkiswap/core:latest
+
+options:
+  # A Rust workspace build is CPU-bound; the larger machine finishes far
+  # sooner and usually costs less overall than the default at this size.
+  machineType: E2_HIGHCPU_8
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 3600s

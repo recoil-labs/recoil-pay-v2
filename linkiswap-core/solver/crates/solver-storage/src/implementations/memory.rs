@@ -1,0 +1,497 @@
+//! In-memory storage backend implementation for the solver service.
+//!
+//! This module provides a memory-based implementation of the StorageInterface trait,
+//! useful for testing and development scenarios where persistence is not required.
+//!
+//! # ⚠️ Test-Only Backend
+//!
+//! This backend is intended for **testing only**:
+//! - TTL is tracked but cleanup is manual (call `cleanup_expired()`)
+//! - Atomic operations use `RwLock` (single-process only, not distributed)
+//! - Data is lost on restart
+//!
+//! For production, use Redis or another persistent backend.
+
+use crate::{QueryFilter, StorageError, StorageIndexes, StorageInterface};
+use async_trait::async_trait;
+use serde::Deserialize;
+use solver_types::{ConfigSchema, ValidationError};
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::sync::RwLock;
+
+/// Entry stored in memory with optional expiration.
+#[derive(Clone)]
+struct StorageEntry {
+	/// The stored value.
+	value: Vec<u8>,
+	/// When this entry expires (None = never expires).
+	expires_at: Option<Instant>,
+}
+
+impl StorageEntry {
+	/// Check if this entry has expired.
+	fn is_expired(&self) -> bool {
+		self.expires_at.map(|t| Instant::now() > t).unwrap_or(false)
+	}
+}
+
+/// In-memory storage implementation.
+///
+/// # ⚠️ Test-Only Backend
+///
+/// This implementation stores data in a HashMap in memory:
+/// - TTL is tracked but cleanup requires calling `cleanup_expired()`
+/// - Atomic operations use `RwLock` (single-process only)
+/// - Data is lost on restart
+///
+/// For production, use Redis or another persistent backend.
+pub struct MemoryStorage {
+	/// The in-memory store protected by a read-write lock.
+	store: Arc<RwLock<HashMap<String, StorageEntry>>>,
+	/// Secondary indexes protected separately from values.
+	indexes: Arc<RwLock<MemoryIndexes>>,
+}
+
+type MemoryIndexes = HashMap<String, HashMap<String, HashMap<serde_json::Value, HashSet<String>>>>;
+
+impl MemoryStorage {
+	/// Creates a new MemoryStorage instance.
+	pub fn new() -> Self {
+		Self {
+			store: Arc::new(RwLock::new(HashMap::new())),
+			indexes: Arc::new(RwLock::new(HashMap::new())),
+		}
+	}
+}
+
+impl Default for MemoryStorage {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
+fn namespace_from_key(key: &str) -> &str {
+	key.split(':').next().unwrap_or("")
+}
+
+fn remove_key_from_indexes(indexes: &mut MemoryIndexes, key: &str) {
+	for namespace_index in indexes.values_mut() {
+		for field_index in namespace_index.values_mut() {
+			for keys in field_index.values_mut() {
+				keys.remove(key);
+			}
+			field_index.retain(|_, keys| !keys.is_empty());
+		}
+		namespace_index.retain(|_, field_index| !field_index.is_empty());
+	}
+	indexes.retain(|_, namespace_index| !namespace_index.is_empty());
+}
+
+fn apply_indexes_for_key(indexes: &mut MemoryIndexes, key: &str, storage_indexes: &StorageIndexes) {
+	let namespace = namespace_from_key(key).to_string();
+	let namespace_index = indexes.entry(namespace).or_default();
+
+	for (field, value) in &storage_indexes.fields {
+		namespace_index
+			.entry(field.clone())
+			.or_default()
+			.entry(value.clone())
+			.or_default()
+			.insert(key.to_string());
+	}
+}
+
+fn keys_for_namespace(store: &HashMap<String, StorageEntry>, namespace: &str) -> HashSet<String> {
+	let prefix = format!("{namespace}:");
+	store
+		.iter()
+		.filter_map(|(key, entry)| {
+			if !entry.is_expired() && key.starts_with(&prefix) {
+				Some(key.clone())
+			} else {
+				None
+			}
+		})
+		.collect()
+}
+
+fn indexed_keys(
+	indexes: &MemoryIndexes,
+	namespace: &str,
+	field: &str,
+	value: &serde_json::Value,
+) -> HashSet<String> {
+	indexes
+		.get(namespace)
+		.and_then(|namespace_index| namespace_index.get(field))
+		.and_then(|field_index| field_index.get(value))
+		.cloned()
+		.unwrap_or_default()
+}
+
+fn indexed_query_keys(
+	store: &HashMap<String, StorageEntry>,
+	indexes: &MemoryIndexes,
+	namespace: &str,
+	filter: &QueryFilter,
+) -> Vec<String> {
+	let all = keys_for_namespace(store, namespace);
+	let mut keys = match filter {
+		QueryFilter::All => all.clone(),
+		QueryFilter::Equals(field, expected) => indexed_keys(indexes, namespace, field, expected),
+		QueryFilter::NotEquals(field, expected) => {
+			let excluded = indexed_keys(indexes, namespace, field, expected);
+			all.difference(&excluded).cloned().collect()
+		},
+		QueryFilter::In(field, values) => values
+			.iter()
+			.flat_map(|value| indexed_keys(indexes, namespace, field, value))
+			.collect(),
+		QueryFilter::NotIn(field, values) => {
+			let excluded: HashSet<String> = values
+				.iter()
+				.flat_map(|value| indexed_keys(indexes, namespace, field, value))
+				.collect();
+			all.difference(&excluded).cloned().collect()
+		},
+	};
+
+	keys.retain(|key| all.contains(key));
+	let mut keys: Vec<String> = keys.into_iter().collect();
+	keys.sort();
+	keys
+}
+
+async fn refresh_memory_indexes(
+	indexes: &Arc<RwLock<MemoryIndexes>>,
+	key: &str,
+	storage_indexes: Option<StorageIndexes>,
+) {
+	let mut indexes = indexes.write().await;
+	remove_key_from_indexes(&mut indexes, key);
+	if let Some(storage_indexes) = storage_indexes {
+		apply_indexes_for_key(&mut indexes, key, &storage_indexes);
+	}
+}
+
+#[async_trait]
+impl StorageInterface for MemoryStorage {
+	async fn get_bytes(&self, key: &str) -> Result<Vec<u8>, StorageError> {
+		let store = self.store.read().await;
+		match store.get(key) {
+			Some(entry) if !entry.is_expired() => Ok(entry.value.clone()),
+			Some(_) => Err(StorageError::NotFound(key.to_string())), // Expired
+			None => Err(StorageError::NotFound(key.to_string())),
+		}
+	}
+
+	async fn set_bytes(
+		&self,
+		key: &str,
+		value: Vec<u8>,
+		indexes: Option<StorageIndexes>,
+		ttl: Option<Duration>,
+	) -> Result<(), StorageError> {
+		let mut store = self.store.write().await;
+		let entry = StorageEntry {
+			value,
+			expires_at: ttl.map(|d| Instant::now() + d),
+		};
+		store.insert(key.to_string(), entry);
+		drop(store);
+		refresh_memory_indexes(&self.indexes, key, indexes).await;
+		Ok(())
+	}
+
+	async fn delete(&self, key: &str) -> Result<(), StorageError> {
+		let mut store = self.store.write().await;
+		store.remove(key);
+		drop(store);
+		refresh_memory_indexes(&self.indexes, key, None).await;
+		Ok(())
+	}
+
+	async fn exists(&self, key: &str) -> Result<bool, StorageError> {
+		let store = self.store.read().await;
+		match store.get(key) {
+			Some(entry) => Ok(!entry.is_expired()),
+			None => Ok(false),
+		}
+	}
+
+	fn config_schema(&self) -> Box<dyn ConfigSchema> {
+		Box::new(MemoryStorageSchema)
+	}
+
+	async fn query(
+		&self,
+		namespace: &str,
+		filter: QueryFilter,
+	) -> Result<Vec<String>, StorageError> {
+		let store = self.store.read().await;
+		let indexes = self.indexes.read().await;
+		Ok(indexed_query_keys(&store, &indexes, namespace, &filter))
+	}
+
+	async fn get_batch(&self, keys: &[String]) -> Result<Vec<(String, Vec<u8>)>, StorageError> {
+		let store = self.store.read().await;
+		let mut results = Vec::new();
+
+		for key in keys {
+			if let Some(entry) = store.get(key) {
+				if !entry.is_expired() {
+					results.push((key.clone(), entry.value.clone()));
+				}
+			}
+		}
+
+		Ok(results)
+	}
+
+	async fn cleanup_expired(&self) -> Result<usize, StorageError> {
+		let mut store = self.store.write().await;
+		let before = store.len();
+		let expired_keys: Vec<String> = store
+			.iter()
+			.filter_map(|(key, entry)| {
+				if entry.is_expired() {
+					Some(key.clone())
+				} else {
+					None
+				}
+			})
+			.collect();
+		store.retain(|_, entry| !entry.is_expired());
+		let removed = before - store.len();
+		drop(store);
+		for key in expired_keys {
+			refresh_memory_indexes(&self.indexes, &key, None).await;
+		}
+		Ok(removed)
+	}
+
+	// ==================== Atomic Operations ====================
+
+	async fn set_nx(
+		&self,
+		key: &str,
+		value: Vec<u8>,
+		ttl: Option<Duration>,
+	) -> Result<bool, StorageError> {
+		let mut store = self.store.write().await;
+
+		// Check if key exists and is not expired
+		if let Some(entry) = store.get(key) {
+			if !entry.is_expired() {
+				return Ok(false); // Key exists
+			}
+			// Key is expired, remove it and continue
+		}
+
+		// Set the value
+		let entry = StorageEntry {
+			value,
+			expires_at: ttl.map(|d| Instant::now() + d),
+		};
+		store.insert(key.to_string(), entry);
+		drop(store);
+		refresh_memory_indexes(&self.indexes, key, None).await;
+		Ok(true)
+	}
+
+	async fn compare_and_swap(
+		&self,
+		key: &str,
+		expected: &[u8],
+		new_value: Vec<u8>,
+		ttl: Option<Duration>,
+	) -> Result<bool, StorageError> {
+		let mut store = self.store.write().await;
+
+		match store.get(key) {
+			Some(entry) if entry.is_expired() => {
+				// Treat expired as not found
+				Err(StorageError::NotFound(key.to_string()))
+			},
+			Some(entry) => {
+				if entry.value == expected {
+					// Match - swap the value
+					let new_entry = StorageEntry {
+						value: new_value,
+						expires_at: ttl.map(|d| Instant::now() + d),
+					};
+					store.insert(key.to_string(), new_entry);
+					drop(store);
+					refresh_memory_indexes(&self.indexes, key, None).await;
+					Ok(true)
+				} else {
+					// Mismatch
+					Ok(false)
+				}
+			},
+			None => Err(StorageError::NotFound(key.to_string())),
+		}
+	}
+
+	async fn compare_and_swap_with_indexes(
+		&self,
+		key: &str,
+		expected: &[u8],
+		new_value: Vec<u8>,
+		indexes: Option<StorageIndexes>,
+		ttl: Option<Duration>,
+	) -> Result<bool, StorageError> {
+		let swapped = self.compare_and_swap(key, expected, new_value, ttl).await?;
+		if swapped {
+			refresh_memory_indexes(&self.indexes, key, indexes).await;
+		}
+		Ok(swapped)
+	}
+
+	async fn delete_if_exists(&self, key: &str) -> Result<bool, StorageError> {
+		let mut store = self.store.write().await;
+
+		match store.remove(key) {
+			Some(entry) if !entry.is_expired() => {
+				drop(store);
+				refresh_memory_indexes(&self.indexes, key, None).await;
+				Ok(true)
+			}, // Existed and was deleted
+			Some(_) => Ok(false), // Was expired (treat as not existed)
+			None => Ok(false),    // Didn't exist
+		}
+	}
+}
+
+/// Configuration schema for MemoryStorage.
+pub struct MemoryStorageSchema;
+
+/// Dedicated typed configuration for in-memory storage.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MemoryStorageConfig {}
+
+impl MemoryStorageConfig {
+	fn from_json(config: &serde_json::Value) -> Result<Self, ValidationError> {
+		serde_json::from_value(config.clone())
+			.map_err(|err| ValidationError::DeserializationError(err.to_string()))
+	}
+}
+
+impl MemoryStorageSchema {
+	/// Static validation method for use before instance creation
+	pub fn validate_config(config: &serde_json::Value) -> Result<(), ValidationError> {
+		MemoryStorageConfig::from_json(config).map(|_| ())
+	}
+}
+
+impl ConfigSchema for MemoryStorageSchema {
+	fn validate(&self, config: &serde_json::Value) -> Result<(), ValidationError> {
+		MemoryStorageConfig::from_json(config).map(|_| ())
+	}
+}
+
+/// Factory function to create a memory storage backend from configuration.
+///
+/// Configuration parameters:
+/// - None required for memory storage
+pub fn create_storage(
+	config: &serde_json::Value,
+) -> Result<Box<dyn StorageInterface>, StorageError> {
+	// Validate configuration first (even though memory storage has no config)
+	MemoryStorageSchema::validate_config(config)
+		.map_err(|e| StorageError::Configuration(format!("Invalid configuration: {e}")))?;
+
+	Ok(Box::new(MemoryStorage::new()))
+}
+
+/// Registry for the memory storage implementation.
+pub struct Registry;
+
+impl solver_types::ImplementationRegistry for Registry {
+	const NAME: &'static str = "memory";
+	type Factory = crate::StorageFactory;
+
+	fn factory() -> Self::Factory {
+		create_storage
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_schema_validation_valid_empty_config() {
+		let config = serde_json::Value::Object(serde_json::Map::new());
+		assert!(MemoryStorageSchema::validate_config(&config).is_ok());
+	}
+
+	#[test]
+	fn test_schema_validation_rejects_unknown_fields() {
+		let config = serde_json::json!({
+			"unexpected": "value"
+		});
+		assert!(MemoryStorageSchema::validate_config(&config).is_err());
+	}
+
+	#[test]
+	fn test_schema_validation_rejects_non_table_root() {
+		let config = serde_json::Value::String("not-a-table".to_string());
+		assert!(MemoryStorageSchema::validate_config(&config).is_err());
+	}
+
+	#[tokio::test]
+	async fn test_basic_operations() {
+		let storage = MemoryStorage::new();
+
+		// Test set and get
+		let key = "test_key";
+		let value = b"test_value".to_vec();
+		storage
+			.set_bytes(key, value.clone(), None, None)
+			.await
+			.unwrap();
+
+		let retrieved = storage.get_bytes(key).await.unwrap();
+		assert_eq!(retrieved, value);
+
+		// Test exists
+		assert!(storage.exists(key).await.unwrap());
+
+		// Test delete
+		storage.delete(key).await.unwrap();
+		assert!(!storage.exists(key).await.unwrap());
+
+		// Test get after delete
+		let result = storage.get_bytes(key).await;
+		assert!(matches!(result, Err(StorageError::NotFound(_))));
+	}
+
+	#[tokio::test]
+	async fn test_overwrite() {
+		let storage = MemoryStorage::new();
+
+		let key = "overwrite_key";
+		let value1 = b"value1".to_vec();
+		let value2 = b"value2".to_vec();
+
+		// Set initial value
+		storage
+			.set_bytes(key, value1.clone(), None, None)
+			.await
+			.unwrap();
+		let retrieved = storage.get_bytes(key).await.unwrap();
+		assert_eq!(retrieved, value1);
+
+		// Overwrite with new value
+		storage
+			.set_bytes(key, value2.clone(), None, None)
+			.await
+			.unwrap();
+		let retrieved = storage.get_bytes(key).await.unwrap();
+		assert_eq!(retrieved, value2);
+	}
+}

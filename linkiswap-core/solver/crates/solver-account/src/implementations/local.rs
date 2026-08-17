@@ -1,0 +1,291 @@
+//! Account provider implementations for the solver service.
+//!
+//! This module provides concrete implementations of the AccountInterface trait,
+//! currently supporting local private key wallets using the Alloy library.
+
+use crate::{AccountError, AccountFactoryFuture, AccountInterface, AccountSigner};
+use alloy_signer_local::PrivateKeySigner;
+use async_trait::async_trait;
+use serde::Deserialize;
+use solver_types::{Address, ConfigSchema, ValidationError};
+
+/// Local wallet implementation using Alloy's signer.
+///
+/// This implementation manages a private key locally and uses it to sign
+/// transactions and messages. It's suitable for development and testing
+/// environments where key management simplicity is preferred.
+#[derive(Debug)]
+pub struct LocalWallet {
+	/// The underlying Alloy signer that handles cryptographic operations.
+	signer: PrivateKeySigner,
+}
+
+/// Dedicated typed configuration for local wallet accounts.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LocalWalletConfig {
+	private_key: String,
+}
+
+impl LocalWalletConfig {
+	fn from_json(config: &serde_json::Value) -> Result<Self, ValidationError> {
+		let parsed: Self = serde_json::from_value(config.clone())
+			.map_err(|err| ValidationError::DeserializationError(err.to_string()))?;
+		parsed.validate()?;
+		Ok(parsed)
+	}
+
+	fn validate(&self) -> Result<(), ValidationError> {
+		let key_without_prefix = self
+			.private_key
+			.strip_prefix("0x")
+			.unwrap_or(self.private_key.as_str());
+
+		if key_without_prefix.len() != 64 {
+			return Err(ValidationError::InvalidValue {
+				field: "private_key".to_string(),
+				message: "Private key must be 64 hex characters (32 bytes)".to_string(),
+			});
+		}
+
+		if hex::decode(key_without_prefix).is_err() {
+			return Err(ValidationError::InvalidValue {
+				field: "private_key".to_string(),
+				message: "Private key must be valid hexadecimal".to_string(),
+			});
+		}
+
+		Ok(())
+	}
+}
+
+impl LocalWallet {
+	/// Creates a new LocalWallet from a hex-encoded private key.
+	///
+	/// The private key should be provided as a hex string (with or without 0x prefix).
+	pub fn new(private_key_hex: &str) -> Result<Self, AccountError> {
+		// Parse the private key using Alloy's signer
+		let signer = private_key_hex
+			.parse::<PrivateKeySigner>()
+			.map_err(|e| AccountError::InvalidKey(format!("Invalid private key: {e}")))?;
+
+		Ok(Self { signer })
+	}
+}
+
+/// Configuration schema for LocalWallet.
+pub struct LocalWalletSchema;
+
+impl LocalWalletSchema {
+	/// Static validation method for use before instance creation
+	pub fn validate_config(config: &serde_json::Value) -> Result<(), ValidationError> {
+		LocalWalletConfig::from_json(config).map(|_| ())
+	}
+}
+
+impl ConfigSchema for LocalWalletSchema {
+	fn validate(&self, config: &serde_json::Value) -> Result<(), ValidationError> {
+		LocalWalletConfig::from_json(config).map(|_| ())
+	}
+}
+
+#[async_trait]
+impl AccountInterface for LocalWallet {
+	async fn address(&self) -> Result<Address, AccountError> {
+		let alloy_address = self.signer.address();
+		Ok(alloy_address.into())
+	}
+
+	fn signer(&self) -> AccountSigner {
+		AccountSigner::Local(self.signer.clone())
+	}
+}
+
+/// Factory function to create an account provider from configuration.
+///
+/// This function reads the account configuration and creates the appropriate
+/// AccountInterface implementation. Currently only supports local wallets
+/// with a private_key configuration parameter.
+///
+/// Returns an async future that resolves to the account implementation.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - `private_key` is not provided in the configuration
+/// - The wallet creation fails
+pub fn create_account(config: &serde_json::Value) -> AccountFactoryFuture<'_> {
+	Box::pin(async move {
+		let parsed = LocalWalletConfig::from_json(config)
+			.map_err(|e| AccountError::InvalidKey(format!("Invalid configuration: {e}")))?;
+		Ok(Box::new(LocalWallet::new(&parsed.private_key)?) as Box<dyn AccountInterface>)
+	})
+}
+
+/// Registry for the local account implementation.
+pub struct Registry;
+
+impl solver_types::ImplementationRegistry for Registry {
+	const NAME: &'static str = "local";
+	type Factory = crate::AccountFactory;
+
+	fn factory() -> Self::Factory {
+		create_account
+	}
+}
+
+impl crate::AccountRegistry for Registry {}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use solver_types::ImplementationRegistry;
+	use std::collections::HashMap;
+
+	// Test private key (FOR TESTING ONLY!)
+	const TEST_PRIVATE_KEY: &str =
+		"ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+	const TEST_PRIVATE_KEY_WITH_PREFIX: &str =
+		"0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+	const INVALID_PRIVATE_KEY: &str = "invalid_key";
+	const SHORT_PRIVATE_KEY: &str = "1234";
+
+	fn create_test_config(private_key: &str) -> serde_json::Value {
+		let mut config = HashMap::new();
+		config.insert(
+			"private_key".to_string(),
+			serde_json::Value::String(private_key.to_string()),
+		);
+		serde_json::Value::Object(config.into_iter().collect())
+	}
+
+	#[test]
+	fn test_local_wallet_new_valid_key() {
+		let wallet = LocalWallet::new(TEST_PRIVATE_KEY).unwrap();
+		assert!(wallet.signer.to_bytes().len() == 32);
+	}
+
+	#[test]
+	fn test_local_wallet_new_valid_key_with_prefix() {
+		let wallet = LocalWallet::new(TEST_PRIVATE_KEY_WITH_PREFIX).unwrap();
+		assert!(wallet.signer.to_bytes().len() == 32);
+	}
+
+	#[test]
+	fn test_local_wallet_new_invalid_key() {
+		let result = LocalWallet::new(INVALID_PRIVATE_KEY);
+		assert!(result.is_err());
+		assert!(matches!(result.unwrap_err(), AccountError::InvalidKey(_)));
+	}
+
+	#[test]
+	fn test_schema_validation_valid_config() {
+		let config = create_test_config(TEST_PRIVATE_KEY);
+		let result = LocalWalletSchema::validate_config(&config);
+		assert!(result.is_ok());
+	}
+
+	#[test]
+	fn test_schema_validation_valid_config_with_prefix() {
+		let config = create_test_config(TEST_PRIVATE_KEY_WITH_PREFIX);
+		let result = LocalWalletSchema::validate_config(&config);
+		assert!(result.is_ok());
+	}
+
+	#[test]
+	fn test_schema_validation_invalid_hex() {
+		let config = create_test_config(INVALID_PRIVATE_KEY);
+		let result = LocalWalletSchema::validate_config(&config);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_schema_validation_short_key() {
+		let config = create_test_config(SHORT_PRIVATE_KEY);
+		let result = LocalWalletSchema::validate_config(&config);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_schema_validation_missing_private_key() {
+		let config = serde_json::Value::Object(HashMap::new().into_iter().collect());
+		let result = LocalWalletSchema::validate_config(&config);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_schema_validation_rejects_unknown_fields() {
+		let config = serde_json::json!({
+			"private_key": TEST_PRIVATE_KEY,
+			"unexpected": "value"
+		});
+		let result = LocalWalletSchema::validate_config(&config);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_schema_validation_rejects_non_table_root() {
+		let config = serde_json::Value::String(TEST_PRIVATE_KEY.to_string());
+		let result = LocalWalletSchema::validate_config(&config);
+		assert!(result.is_err());
+	}
+
+	#[tokio::test]
+	async fn test_account_interface_address() {
+		let wallet = LocalWallet::new(TEST_PRIVATE_KEY).unwrap();
+		let address = wallet.address().await.unwrap();
+		assert_eq!(address.0.len(), 20);
+	}
+
+	#[tokio::test]
+	async fn test_create_account_valid_config() {
+		let config = create_test_config(TEST_PRIVATE_KEY);
+		let account = create_account(&config).await.unwrap();
+		assert_eq!(account.address().await.unwrap().0.len(), 20);
+	}
+
+	#[tokio::test]
+	async fn test_create_account_invalid_config() {
+		let config = create_test_config(INVALID_PRIVATE_KEY);
+		let result = create_account(&config).await;
+		assert!(result.is_err());
+	}
+
+	#[tokio::test]
+	async fn test_create_account_missing_private_key() {
+		let config = serde_json::Value::Object(HashMap::new().into_iter().collect());
+		let result = create_account(&config).await;
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_registry_name() {
+		assert_eq!(Registry::NAME, "local");
+	}
+
+	#[tokio::test]
+	async fn test_registry_factory() {
+		let factory = Registry::factory();
+		let config = create_test_config(TEST_PRIVATE_KEY);
+		let account = factory(&config).await.unwrap();
+		assert_eq!(account.address().await.unwrap().0.len(), 20);
+	}
+
+	#[test]
+	fn test_account_interface_signer() {
+		let wallet = LocalWallet::new(TEST_PRIVATE_KEY).unwrap();
+		let signer = wallet.signer();
+
+		// Verify the signer is a Local variant and has the correct address
+		match signer {
+			crate::AccountSigner::Local(s) => {
+				// Verify address matches
+				let expected_address = alloy_signer::Signer::address(&wallet.signer);
+				let actual_address = alloy_signer::Signer::address(&s);
+				assert_eq!(expected_address, actual_address);
+			},
+			#[cfg(feature = "kms")]
+			_ => panic!("Expected Local signer"),
+		}
+	}
+}

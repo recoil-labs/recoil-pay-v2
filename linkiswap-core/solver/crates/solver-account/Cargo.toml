@@ -1,0 +1,37 @@
+[package]
+name = "solver-account"
+version = "0.1.0"
+edition = "2021"
+rust-version.workspace = true
+
+[features]
+testing = ["mockall"]
+kms     = ["alloy-signer-aws", "aws-config", "aws-sdk-kms"]
+solana  = ["solana-sdk", "bs58"]
+
+[dependencies]
+alloy-consensus = { workspace = true }
+alloy-network = { workspace = true }
+alloy-primitives = { workspace = true }
+alloy-signer = { workspace = true }
+
+# KMS dependencies (optional)
+alloy-signer-aws = { workspace = true, optional = true }
+alloy-signer-local = { workspace = true }
+async-trait = "0.1"
+aws-config = { workspace = true, optional = true }
+aws-sdk-kms = { workspace = true, optional = true }
+bs58 = { workspace = true, optional = true }
+hex = "0.4"
+mockall = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+solver-types = { path = "../solver-types" }
+thiserror = "2.0.17"
+tokio = { workspace = true }
+
+# Solana dependencies (optional)
+solana-sdk = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
