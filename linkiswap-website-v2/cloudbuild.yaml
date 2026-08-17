@@ -8,7 +8,7 @@
 # standalone OIF stack, which returned 503 for every quote request.
 
 substitutions:
-  _AGGREGATOR_URL: https://linkiswap-aggregator-155541213920.us-central1.run.app
+  _AGGREGATOR_URL: https://recoil-aggregator-675174162902.us-central1.run.app
   # Public client identifiers — they ship inside the bundle either way.
   _WALLETCONNECT_PROJECT_ID: e0a1b3a2a85284ebdca25f4bbdab1efe
   _GHOST_API_URL: https://blog.linkiswap.com
@@ -40,11 +40,11 @@ steps:
           --build-arg=VITE_GHOST_API_URL=${_GHOST_API_URL} \
           --build-arg=VITE_GHOST_CONTENT_KEY=${_GHOST_CONTENT_KEY} \
           --build-arg=VITE_HF_ACCESS_TOKEN="$$HF_TOKEN" \
-          -t us-central1-docker.pkg.dev/$PROJECT_ID/linkiswap/website-v2:latest \
+          -t us-central1-docker.pkg.dev/$PROJECT_ID/recoil/website-v2:latest \
           .
 
 images:
-  - us-central1-docker.pkg.dev/$PROJECT_ID/linkiswap/website-v2:latest
+  - us-central1-docker.pkg.dev/$PROJECT_ID/recoil/website-v2:latest
 
 options:
   logging: CLOUD_LOGGING_ONLY

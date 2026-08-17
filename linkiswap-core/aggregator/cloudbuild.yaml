@@ -19,11 +19,11 @@ steps:
       - |
         docker build \
           --build-arg BUILDPLATFORM=linux/amd64 \
-          -t us-central1-docker.pkg.dev/$PROJECT_ID/linkiswap/core:latest \
+          -t us-central1-docker.pkg.dev/$PROJECT_ID/recoil/core:latest \
           -f Dockerfile .
 
 images:
-  - us-central1-docker.pkg.dev/$PROJECT_ID/linkiswap/core:latest
+  - us-central1-docker.pkg.dev/$PROJECT_ID/recoil/core:latest
 
 options:
   # A Rust workspace build is CPU-bound; the larger machine finishes far
