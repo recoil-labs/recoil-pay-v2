@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { BookOpen, Code2, ExternalLink, Radio, Send, Sparkles, type LucideIcon } from 'lucide-react';
+import { Code2, ExternalLink, Radio, Send, Sparkles, type LucideIcon } from 'lucide-react';
 import Logo from './Logo';
 
 interface FooterLink {
@@ -11,9 +11,8 @@ interface FooterLink {
 
 const LINKS: FooterLink[] = [
   { key: 'app', href: '#', external: false, icon: Sparkles },
-  { key: 'docs', href: 'https://docs.linkiswap.com/', external: true, icon: BookOpen },
   { key: 'solvers', href: '#marketplace', external: false, icon: Radio },
-  { key: 'twitter', href: 'https://x.com/LinkiSwap', external: true, icon: Send },
+  { key: 'twitter', href: 'https://x.com/RecoilPay', external: true, icon: Send },
   { key: 'github', href: '#', external: false, icon: Code2 },
 ];
 

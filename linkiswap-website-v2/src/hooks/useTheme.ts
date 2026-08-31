@@ -2,7 +2,7 @@ import { useCallback, useSyncExternalStore } from 'react';
 
 export type Theme = 'dark' | 'light';
 
-const STORAGE_KEY = 'linkiswap-theme';
+const STORAGE_KEY = 'recoilpay-theme';
 
 function readInitialTheme(): Theme {
   if (typeof window === 'undefined') return 'dark';

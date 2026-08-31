@@ -45,17 +45,18 @@ export default function Nav() {
     };
   }, [langOpen]);
 
+  // Only sections that still exist, plus the one external destination that
+  // is real: the solver operator portal. Blog and docs pointed at hosts that
+  // died with the old brand's Render workspace.
   const navLinks = [
     { label: t('nav.how'), href: '#how' },
-    { label: t('nav.marketplace', 'Marketplace'), href: '#marketplace' },
-    { label: t('nav.features'), href: '#features' },
-    { label: t('nav.roadmap'),  href: '#roadmap' },
-    { label: t('nav.blog'),     href: 'https://blog.linkiswap.com/', external: true },
-    { label: t('nav.docs'),     href: 'https://docs.linkiswap.com/', external: true },
+    { label: t('nav.marketplace', 'Solvers'), href: '#marketplace' },
+    { label: t('nav.networks', 'Networks'), href: '#networks' },
+    { label: t('nav.solverPortal', 'Run a solver'), href: 'https://recoil-solver-portal-675174162902.us-central1.run.app', external: true },
   ];
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-header-border bg-header-bg/95 backdrop-blur-2xl transition-colors duration-200">
+    <nav className="sticky top-0 z-50 border-b border-header-border bg-header-bg backdrop-blur-xl [backdrop-filter:blur(20px)_saturate(180%)] transition-colors duration-200">
       <div className="mx-auto flex max-w-[1320px] items-center justify-between gap-5 px-5 py-3.5 sm:px-8 lg:px-10">
         <a href="#" className="group flex items-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan/70">
           <Logo height={23} />

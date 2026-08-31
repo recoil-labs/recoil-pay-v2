@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
-import { AlertCircle, ArrowRight, Loader2, PencilLine, Route, Search, Sparkles } from 'lucide-react';
+import { AlertCircle, ArrowRight, Loader2, PencilLine, Route } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -52,17 +52,17 @@ function usePlaceholder(phrases: string[], paused: boolean): string {
 
     const phrase = phrases[phraseIdx] ?? '';
     if (hold > 0) {
-      const id = setTimeout(() => setHold(h => h - 1), 95);
+      const id = setTimeout(() => setHold(h => h - 1), 110);
       return () => clearTimeout(id);
     }
 
     if (!deleting && text.length < phrase.length) {
-      const id = setTimeout(() => setText(phrase.slice(0, text.length + 1)), 90);
+      const id = setTimeout(() => setText(phrase.slice(0, text.length + 1)), 140);
       return () => clearTimeout(id);
     }
 
     if (!deleting && text.length === phrase.length) {
-      const id = setTimeout(() => setHold(18), 95);
+      const id = setTimeout(() => setHold(26), 95);
       return () => clearTimeout(id);
     }
 
@@ -121,117 +121,76 @@ export default function IntentBar() {
   const showResults = intent.phase !== 'idle' || intent.assetsError;
 
   return (
-    <div className="w-full max-w-[760px]">
-      <div className="glass-panel overflow-hidden rounded-[22px]">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-5 py-4 sm:px-6">
-          <div className="flex items-center gap-3 text-left">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full border border-border-cyan bg-primary-dim text-accent-cyan">
-              <Sparkles size={16} aria-hidden="true" />
-            </span>
-            <div>
-              <div className="font-sans text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
-                Intent command
-              </div>
-              <div className="font-display text-base font-semibold text-app-text">
-                Tell LinkiSwap the outcome
-              </div>
-            </div>
-          </div>
-
-          <div className="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-surface-input px-3 py-1.5 font-sans text-[11px] font-semibold uppercase tracking-[0.1em] text-text-secondary">
-            <span className="h-2 w-2 rounded-full bg-mint shadow-[0_0_16px_var(--mint)]" />
-            Solver net live
-          </div>
-        </div>
-
-        <div className="px-4 py-4 sm:px-5">
-          <div
+    <div className="w-full max-w-[720px] text-left">
+      {/*
+        A prompt composer, not a widget. One surface, one field, one control.
+        The header badge ("Intent command"), the search icon, the three-step
+        strip and the tag pills on the examples are gone: the steps now live
+        in the How-it-works section where they can be read, and everything
+        else was chrome telling the reader what the field already shows.
+      */}
+      <div
+        className={cn(
+          'rounded-lg border bg-surface transition-[border-color] duration-150',
+          focused ? 'border-primary' : 'border-border',
+        )}
+      >
+        <div className="flex items-end gap-2 p-2">
+          <Input
+            className="min-h-[56px] flex-1 border-0 bg-transparent px-3 font-sans text-[15px] text-app-text placeholder:text-text-muted focus-visible:ring-0 focus-visible:ring-offset-0 sm:text-base"
+            type="text"
+            value={value}
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) => setValue(event.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => {
+              if (event.key === 'Enter') submit();
+            }}
+            placeholder={placeholder}
+            aria-label="Type an intent"
+          />
+          {/* Square icon control pinned to the field's corner. Enter also
+              submits, so the button is the pointer affordance, not the only
+              path — hence no "Run" label competing with the placeholder. */}
+          <Button
+            type="button"
+            onClick={submit}
+            disabled={!intent.ready || value.trim().length === 0}
+            variant="default"
+            aria-label="Run intent"
             className={cn(
-              'flex min-h-[66px] items-center gap-3 rounded-2xl border bg-surface-input pl-4 pr-2 transition-[border-color,box-shadow,background] duration-200 sm:pl-5',
-              focused
-                ? 'border-border-cyan shadow-[0_0_0_5px_var(--focus-glow),0_24px_70px_-42px_var(--shadow-color)]'
-                : 'border-border-subtle shadow-[0_18px_56px_-46px_var(--shadow-color)]'
+              'h-10 w-10 shrink-0 rounded-md p-0',
+              !intent.ready || value.trim().length === 0 ? 'cursor-default opacity-40' : 'cursor-pointer',
             )}
           >
-            <Search size={20} className="flex-shrink-0 text-accent-cyan" aria-hidden="true" />
-            <Input
-              className="h-14 flex-1 border-0 bg-transparent px-0 font-sans text-[15px] text-app-text placeholder:text-text-muted focus-visible:ring-0 focus-visible:ring-offset-0 sm:text-base"
-              type="text"
-              value={value}
-              onChange={(event: React.ChangeEvent<HTMLInputElement>) => setValue(event.target.value)}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
-              onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => {
-                if (event.key === 'Enter') submit();
-              }}
-              placeholder={placeholder}
-              aria-label="Type an intent"
-            />
-            <Button
-              type="button"
-              onClick={submit}
-              disabled={!intent.ready || value.trim().length === 0}
-              variant="default"
-              className={cn(
-                'h-11 rounded-full px-4 font-sans text-sm font-semibold shadow-[0_16px_34px_-22px_var(--primary)] sm:px-5',
-                !intent.ready || value.trim().length === 0
-                  ? 'cursor-default opacity-50'
-                  : 'cursor-pointer hover:shadow-[0_0_22px_var(--primary-dim)]'
-              )}
-            >
-              <span className="hidden sm:inline">Run</span>
-              <ArrowRight size={17} aria-hidden="true" />
-            </Button>
+            <ArrowRight size={18} aria-hidden="true" />
+          </Button>
+        </div>
+
+        {intent.phase === 'idle' && !intent.assetsError && (
+          <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1.5 border-t border-border px-4 py-3">
+            <span className="font-mono text-[11px] text-text-muted" style={{ letterSpacing: 'var(--tracking-ui)' }}>
+              try
+            </span>
+            {EXAMPLES.map(example => {
+              const isPlaceholder = example.sentence.includes('wallet address');
+              return (
+                <button
+                  key={example.sentence}
+                  type="button"
+                  className="font-sans text-[13px] text-text-secondary underline-offset-4 transition-colors duration-150 hover:text-app-text hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => runExample(example.sentence)}
+                  disabled={!intent.ready}
+                  title={isPlaceholder ? 'Fills the field — replace the wallet address before running' : undefined}
+                >
+                  {example.label}
+                  {isPlaceholder && <span aria-hidden="true" className="ms-1 text-text-muted">…</span>}
+                </button>
+              );
+            })}
           </div>
-
-          {intent.phase === 'idle' && !intent.assetsError && (
-            <div className="mt-4 flex max-w-[720px] flex-wrap justify-center gap-2.5">
-              {EXAMPLES.map(example => {
-                const isPlaceholder = example.sentence.includes('wallet address');
-
-                return (
-                  <button
-                    key={example.sentence}
-                    type="button"
-                    className="group inline-flex cursor-pointer items-center gap-2 rounded-full border border-border-subtle bg-chip-bg px-3.5 py-2 font-sans text-[12.5px] font-medium text-text-secondary transition-[background,border-color,color,transform] duration-200 hover:-translate-y-0.5 hover:border-border-cyan hover:bg-chip-hover-bg hover:text-app-text disabled:cursor-not-allowed disabled:opacity-60"
-                    onClick={() => runExample(example.sentence)}
-                    disabled={!intent.ready}
-                    title={isPlaceholder ? 'Click to fill, then replace wallet address' : undefined}
-                  >
-                    {example.tag && (
-                      <span className="rounded-full border border-border-cyan bg-primary-dim px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-accent-cyan">
-                        {example.tag}
-                      </span>
-                    )}
-                    <span>{example.label}</span>
-                    {isPlaceholder && <PencilLine size={13} className="text-text-muted group-hover:text-accent-cyan" aria-hidden="true" />}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 border-t border-border-subtle bg-surface-glass sm:grid-cols-3">
-          {['Parse intent', 'Auction route', 'Settle assets'].map((step, index) => (
-            <div
-              key={step}
-              className="flex items-center gap-3 border-b border-border-subtle px-5 py-3 text-left last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0"
-            >
-              <span className={cn(
-                'flex h-7 w-7 items-center justify-center rounded-full border font-mono text-[11px] font-semibold',
-                index === 0 ? 'border-border-cyan bg-primary-dim text-accent-cyan' : 'border-border-subtle bg-surface-input text-text-muted'
-              )}>
-                {index + 1}
-              </span>
-              <span className="font-sans text-[12px] font-semibold uppercase tracking-[0.08em] text-text-secondary">
-                {step}
-              </span>
-            </div>
-          ))}
-        </div>
+        )}
       </div>
-
       {showResults && (
         <div className="mt-4 flex flex-col items-center gap-3 text-left">
           {intent.assetsError && intent.phase === 'idle' && (

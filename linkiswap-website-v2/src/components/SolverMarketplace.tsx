@@ -1,143 +1,164 @@
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowDown, Check, Gauge, Radio, Route, Trophy } from 'lucide-react';
-import RevealSection from './RevealSection';
-import { cn } from '@/lib/utils';
+import { Check } from 'lucide-react';
 
-const SOLVERS = [
-  { name: 'Solver A', bid: '0.42%', eta: '41s', winner: false },
-  { name: 'Solver B', bid: '0.31%', eta: '27s', winner: true },
-  { name: 'Solver C', bid: '0.38%', eta: '34s', winner: false },
-];
+import { Section, SectionHeading } from './SectionHeading';
+
+/* ── solver marketplace ───────────────────────────────────────────────────
+   This used to render a staged auction: "Solver A / B / C" with invented
+   bids and ETAs, a "Live quote" label, and a trophy on the pre-chosen winner.
+   None of it was connected to anything.
+
+   It now lists the solvers that are actually registered with the aggregator,
+   fetched live. There are few of them, and that is fine — three real solvers
+   say more than three fictional ones, and the number grows on its own as
+   operators onboard through the portal linked below. */
+
+const PORTAL = 'https://recoil-solver-portal-675174162902.us-central1.run.app';
+
+interface Solver {
+  solverId: string;
+  name?: string;
+  adapterId?: string;
+  status?: string;
+  lastSeen?: string;
+}
+
+function useSolvers() {
+  const [solvers, setSolvers] = useState<Solver[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    const base = (import.meta.env.VITE_OIF_API_BASE_URL as string | undefined)?.replace(/\/$/, '');
+    if (!base) { setFailed(true); return; }
+    const ac = new AbortController();
+    fetch(`${base}/api/v1/solvers`, { signal: ac.signal })
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then(d => setSolvers(Array.isArray(d) ? d : (d?.solvers ?? [])))
+      .catch(() => { if (!ac.signal.aborted) setFailed(true); });
+    return () => ac.abort();
+  }, []);
+
+  return { solvers, failed };
+}
+
+/** Operators register under their wallet address, which is what the
+ *  aggregator stores as the name. Shortened the way a block explorer would. */
+function shortAddress(s: string): string {
+  return /^0x[0-9a-fA-F]{40}$/.test(s) ? `${s.slice(0, 6)}…${s.slice(-4)}` : s;
+}
+
+function relative(iso?: string): string | null {
+  if (!iso) return null;
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const m = Math.round(ms / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  return h < 48 ? `${h}h ago` : `${Math.round(h / 24)}d ago`;
+}
 
 export default function SolverMarketplace() {
   const { t } = useTranslation();
   const benefits = t('market.benefits', { returnObjects: true }) as string[];
+  const { solvers, failed } = useSolvers();
+  const active = (solvers ?? []).filter(s => s.status === 'active');
 
   return (
-    <section id="marketplace" className="section-shell px-5 sm:px-8 lg:px-10">
-      <div className="mx-auto grid max-w-[1200px] grid-cols-1 items-center gap-12 min-[901px]:grid-cols-[0.9fr_1.1fr] min-[901px]:gap-16">
-        <RevealSection>
-          <div className="mb-7 h-0.5 w-10 rounded-sm bg-primary shadow-[0_0_14px_var(--primary-dim)]" />
-          <span className="section-eyebrow">
-            {t('market.label')}
-          </span>
-          <h2 className="section-heading mb-5 mt-4 max-w-[520px] text-[clamp(30px,3.8vw,50px)] leading-[1.06] tracking-normal">
-            {t('market.h2')}
-          </h2>
-          <p className="mb-7 max-w-[500px] text-[15.5px] leading-[1.75] text-text-secondary">
-            {t('market.desc')}
-          </p>
-          <div className="grid max-w-[520px] grid-cols-1 gap-2 sm:grid-cols-2">
-            {benefits.map(benefit => (
-              <div key={benefit} className="glass-card flex items-center gap-3 rounded-xl px-3.5 py-3">
-                <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary-dim text-accent-cyan">
-                  <Check size={14} aria-hidden="true" />
-                </span>
-                <span className="text-[14px] font-semibold text-text-secondary">{benefit}</span>
-              </div>
+    <Section id="marketplace">
+      <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
+        <div>
+          <SectionHeading
+            eyebrow="solvers"
+            title={t('market.h2')}
+            lede={t('market.desc')}
+          />
+          <ul className="mt-8 grid max-w-[520px] grid-cols-1 gap-2 sm:grid-cols-2">
+            {(Array.isArray(benefits) ? benefits : []).map(b => (
+              <li key={b} className="flex items-start gap-2.5 py-1.5">
+                <Check size={15} className="mt-0.5 shrink-0 text-primary" aria-hidden="true" />
+                <span className="font-sans text-sm text-text-secondary" style={{ lineHeight: 'var(--leading-body)' }}>{b}</span>
+              </li>
             ))}
+          </ul>
+          <a
+            href={PORTAL}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="mt-8 inline-flex items-center gap-2 rounded-md border border-border px-4 py-2.5 font-sans text-sm text-app-text transition-colors hover:bg-surface-hover"
+            style={{ letterSpacing: 'var(--tracking-ui)' }}
+          >
+            {t('market.runSolver', 'Run a solver')}
+            <span aria-hidden="true">→</span>
+          </a>
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface">
+          <div className="flex items-center justify-between border-b border-border px-5 py-3">
+            <span className="font-mono text-[11px] text-text-muted" style={{ letterSpacing: 'var(--tracking-ui)' }}>
+              <span className="opacity-50">/</span>registered
+            </span>
+            {solvers && (
+              <span className="font-sans text-xs tabular-nums text-text-secondary">
+                {active.length} active
+              </span>
+            )}
           </div>
-        </RevealSection>
 
-        <RevealSection delay={120}>
-          <div className="glass-panel hover-card overflow-hidden rounded-[26px] p-5 sm:p-6">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border-cyan bg-primary-dim text-accent-cyan">
-                  <Radio size={19} aria-hidden="true" />
-                </span>
-                <div>
-                  <div className="font-sans text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
-                    {t('market.auctionLabel', 'Open auction')}
-                  </div>
-                  <div className="font-display text-lg font-semibold text-app-text">
-                    {t('market.biddingLane', 'Solver bidding lane')}
-                  </div>
-                </div>
-              </div>
-              <span className="rounded-full border border-border-cyan bg-primary-dim px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-accent-cyan">
-                {t('market.liveQuote', 'Live quote')}
-              </span>
-            </div>
-
-            <div className="rounded-2xl bg-surface-input p-4">
-              <div className="flex items-center justify-between gap-4">
-                <span className="font-sans text-[13px] font-semibold text-text-secondary">
-                  {t('market.userIntent')}
-                </span>
-                <span className="font-mono text-[11px] text-text-muted">
-                  {t('market.routePair', 'USDC to USDC')}
-                </span>
-              </div>
-              <div className="mt-3 rounded-xl bg-primary-dim px-4 py-3 font-display text-[20px] font-semibold text-app-text">
-                {t('market.sampleRoute', 'OP Sepolia to Polygon Amoy')}
-              </div>
-            </div>
-
-            <div className="my-4 flex justify-center">
-              <span className="flex h-9 w-9 items-center justify-center rounded-full border border-border-subtle bg-surface text-primary">
-                <ArrowDown size={18} aria-hidden="true" />
-              </span>
-            </div>
-
-            <div className="rounded-2xl bg-primary px-4 py-3 text-center font-sans text-sm font-semibold text-btn-primary-text shadow-[0_18px_50px_-34px_var(--primary)]">
-              {t('market.marketplaceLabel')}
-            </div>
-
-            <div className="my-4 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-              {SOLVERS.map((solver, index) => (
-                <div
-                  key={solver.name}
-                  className={cn(
-                    'hover-tile rounded-2xl p-3 text-left transition-colors duration-200',
-                    solver.winner
-                      ? 'bg-mint-soft shadow-[0_0_28px_var(--mint-soft)]'
-                      : 'bg-surface-input'
-                  )}
-                >
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <span className={cn(
-                      'font-sans text-[13px] font-semibold',
-                      solver.winner ? 'text-mint' : 'text-text-secondary'
-                    )}>
-                      {t(`market.solverNames.${index}`, solver.name)}
-                    </span>
-                    {solver.winner && <Trophy size={15} className="text-mint" aria-hidden="true" />}
-                  </div>
-                  <div className="font-display text-[24px] font-semibold leading-none text-app-text">
-                    {solver.bid}
-                  </div>
-                  <div className="mt-2 flex items-center justify-between gap-2 font-mono text-[11px] text-text-muted">
-                    <span>{t('market.feeLabel', 'fee')}</span>
-                    <span>{solver.eta}</span>
-                  </div>
-                </div>
+          {solvers === null && !failed && (
+            <ul className="px-5">
+              {[0, 1, 2].map(i => (
+                <li key={i} className="border-b border-border py-4 last:border-b-0">
+                  <div className="h-5 w-2/3 animate-pulse rounded bg-surface-hover" />
+                </li>
               ))}
-            </div>
+            </ul>
+          )}
 
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              <div className="rounded-2xl bg-surface-input p-4">
-                <div className="mb-2 flex items-center gap-2 font-sans text-[12px] font-semibold uppercase tracking-[0.1em] text-text-muted">
-                  <Route size={14} className="text-accent-cyan" aria-hidden="true" />
-                  {t('market.routeNote')}
-                </div>
-                <div className="font-sans text-sm text-text-secondary">
-                  {t('market.routeDesc', 'Bridge, swap, and settle behind one signature.')}
-                </div>
-              </div>
-              <div className="rounded-2xl bg-primary-dim p-4">
-                <div className="mb-2 flex items-center gap-2 font-sans text-[12px] font-semibold uppercase tracking-[0.1em] text-accent-cyan">
-                  <Gauge size={14} aria-hidden="true" />
-                  {t('market.winner')}
-                </div>
-                <div className="font-sans text-sm text-text-secondary">
-                  {t('market.winnerDesc', 'Best fee and fastest ETA selected automatically.')}
-                </div>
-              </div>
-            </div>
-          </div>
-        </RevealSection>
+          {failed && (
+            <p className="px-5 py-10 text-center font-sans text-sm text-text-muted">
+              {t('market.unavailable', 'Solver registry unavailable right now.')}
+            </p>
+          )}
+
+          {solvers && solvers.length === 0 && (
+            <p className="px-5 py-10 text-center font-sans text-sm text-text-muted">
+              {t('market.none', 'No solvers registered yet.')}
+            </p>
+          )}
+
+          {solvers && solvers.length > 0 && (
+            <ul className="px-5">
+              {solvers.map(s => {
+                const isActive = s.status === 'active';
+                const seen = relative(s.lastSeen);
+                return (
+                  <li key={s.solverId} className="flex items-center gap-4 border-b border-border py-3.5 last:border-b-0">
+                    {/* Status as a dot, not a "LIVE" pill. */}
+                    <span
+                      aria-hidden="true"
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: isActive ? '#3fb98f' : 'var(--text-muted)' }}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-mono text-[13px] text-app-text">
+                        {shortAddress(s.name || s.solverId)}
+                      </span>
+                      <span className="block font-sans text-xs text-text-muted">
+                        {s.adapterId ?? 'oif'}{seen ? ` · seen ${seen}` : ''}
+                      </span>
+                    </span>
+                    <span className="font-sans text-xs text-text-secondary" style={{ letterSpacing: 'var(--tracking-ui)' }}>
+                      {isActive ? 'active' : (s.status ?? 'unknown')}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </div>
-    </section>
+    </Section>
   );
 }

@@ -28,11 +28,11 @@ const isUserRejectedConnection = (error: unknown) => {
 
 const reportSolanaConnectError = (error: unknown) => {
   if (isUserRejectedConnection(error)) return;
-  console.error('[LinkiSwap] Solana wallet connection failed:', error);
+  console.error('[RecoilPay] Solana wallet connection failed:', error);
 };
 
 /**
- * Unified WalletButton for LinkiSwap V2.
+ * Unified WalletButton for RecoilPay V2.
  * Supports RainbowKit EVM wallets and direct Solana wallet-adapter discovery
  * behind one compact, brand-aligned connect surface.
  */

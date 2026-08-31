@@ -14,7 +14,7 @@
     "h1Line1": "Tell us wetin you",
     "h1Line2": "wan do.",
     "h1Gradient": "We go handle the rest.",
-    "subtitle": "LinkiSwap go turn any hard blockchain transaction to simple money matter. Buy, sell, swap, send and cash out — no need to dey worry about chain, bridge or gas.",
+    "subtitle": "RecoilPay go turn any hard blockchain transaction to simple money matter. Buy, sell, swap, send and cash out — no need to dey worry about chain, bridge or gas.",
     "ctaPrimary": "Open App",
     "ctaSecondary": "Explore V2 →",
     "trustLine": "12+ chain · 0 bridge to manage · no gas wahala"
@@ -42,13 +42,13 @@
     "afterLabel": "After · Just Talk Am",
     "before": ["Choose chain", "Choose bridge", "Choose route", "Pay gas", "Execute"],
     "after": ["Send $100 give Tunde", "Swap USDC for ETH", "Cash out to my bank", "Buy gift card"],
-    "note": "LinkiSwap go find the best execution path by itself."
+    "note": "RecoilPay go find the best execution path by itself."
   },
   "how": {
     "label": "How E Dey Work",
     "h2": "E dey run on your order.",
     "steps": [
-      { "title": "Create your order", "desc": "Tell LinkiSwap wetin you want — for simple language." },
+      { "title": "Create your order", "desc": "Tell RecoilPay wetin you want — for simple language." },
       { "title": "Find the way", "desc": "The market go find the best path for every chain." },
       { "title": "Solvers go compete", "desc": "Many solvers go bid to do your order, the fastest and cheapest go win." },
       { "title": "E don settle", "desc": "Your assets go land exactly where dem suppose go." }
@@ -60,7 +60,7 @@
     "desc": "Every order dey broadcast to competitive market. Solvers dey race to give you the best deal — you go always get the winning bid.",
     "benefits": ["Better price", "Faster execution", "More liquidity", "More reliable"],
     "userIntent": "Your Order",
-    "marketplaceLabel": "LinkiSwap Market",
+    "marketplaceLabel": "RecoilPay Market",
     "winner": "✓ Best Deal Win",
     "routeNote": "Best route · solvers choose am",
     "solversNote": "●●● 3 solvers dey compete"
@@ -82,7 +82,7 @@
     "h2": "We dey build the financial execution layer for digital assets.",
     "tagline": "Internet get search engine. · Cloud get infrastructure. ·",
     "taglineHighlight": "Digital assets need execution layer.",
-    "desc": "LinkiSwap na the infrastructure wey dey connect users, liquidity providers and solvers for one unified network."
+    "desc": "RecoilPay na the infrastructure wey dey connect users, liquidity providers and solvers for one unified network."
   },
   "roadmap": {
     "label": "Roadmap",
@@ -97,14 +97,14 @@
   "cta": {
     "h2Line1": "Stop dey do transaction by yourself.",
     "h2Line2": "Start achieving your goals.",
-    "desc": "Tell LinkiSwap wetin you wan do. We go figure out how.",
+    "desc": "Tell RecoilPay wetin you wan do. We go figure out how.",
     "launchApp": "Open App",
     "docs": "Read the docs →"
   },
   "footer": {
     "tagline": "Finance wey follow your order",
     "links": { "app": "App", "docs": "Docs", "solvers": "Solvers", "twitter": "X / Twitter", "github": "GitHub" },
-    "copyright": "© 2026 LinkiSwap"
+    "copyright": "© 2026 RecoilPay"
   },
   "intentBar": {
     "phrases": [

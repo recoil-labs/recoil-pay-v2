@@ -1,5 +1,5 @@
 /**
- * Solana chain constants and helpers used by the linkiswap UI.
+ * Solana chain constants and helpers used by the recoilpay UI.
  *
  * The virtual chain IDs here must match `solver_types::virtual_chain_ids`
  * in the Rust solver backend.

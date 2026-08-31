@@ -13,11 +13,14 @@ interface RevealSectionProps {
   amount?: number;
 }
 
+// Critically damped: the element arrives and stops. The previous under-
+// damped spring overshot and settled, which on a scroll-triggered reveal
+// reads as wobble rather than as arrival — bounce belongs on gestures that
+// carried momentum, not on content that appeared because you scrolled.
 const revealSpring: Transition = {
   type: 'spring',
-  stiffness: 130,
-  damping: 24,
-  mass: 0.85,
+  duration: 0.55,
+  bounce: 0,
 };
 
 function getHiddenOffset(direction: RevealDirection, distance: number) {
@@ -39,7 +42,7 @@ export default function RevealSection({
   className,
   delay = 0,
   direction = 'up',
-  distance = 22,
+  distance = 12,
   amount = 0.16,
 }: RevealSectionProps) {
   const reduceMotion = useReducedMotion();

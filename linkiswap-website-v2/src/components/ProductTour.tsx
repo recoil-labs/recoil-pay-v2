@@ -96,7 +96,7 @@ export default function ProductTour() {
                 {active.youtubeId ? (
                   <LiteYouTubeEmbed
                     id={active.youtubeId}
-                    title={`LinkiSwap ${t(`tour.tabs.${active.key}.title`)} demo`}
+                    title={`RecoilPay ${t(`tour.tabs.${active.key}.title`)} demo`}
                     poster="maxresdefault"
                     params="rel=0"
                   />

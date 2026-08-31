@@ -7,7 +7,12 @@ import type {
   SolversResponse,
 } from './types';
 
-/** Aggregator base URL. In dev the Vite proxy forwards to localhost:4000; in production set VITE_OIF_API_BASE_URL. */
+/**
+ * Aggregator base URL. Set VITE_OIF_API_BASE_URL (see .env.example) — every
+ * environment points at the hosted aggregator on GCP. If it is unset the
+ * calls go relative and the Vite dev proxy forwards them to the same host,
+ * so there is no path left that reaches a local instance by accident.
+ */
 export const OIF_API_BASE_URL: string =
   import.meta.env.VITE_OIF_API_BASE_URL ?? '';
 

@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://linkiswap.com/sitemap.xml
+Sitemap: https://recoil-v2-675174162902.us-central1.run.app/sitemap.xml

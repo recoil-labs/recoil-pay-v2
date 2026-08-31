@@ -22,9 +22,9 @@ const projectId =
     : 'dev-fallback-projectid-please-replace';
 
 export const wagmiConfig = getDefaultConfig({
-  appName: 'LinkiSwap',
+  appName: 'RecoilPay',
   appDescription: "Cross-chain swaps and transfers",
-  appUrl: import.meta.env.VITE_APP_URL || "https://linkiswap.com",
+  appUrl: import.meta.env.VITE_APP_URL || "https://recoilpay.com",
   projectId,
   wallets: [
     {

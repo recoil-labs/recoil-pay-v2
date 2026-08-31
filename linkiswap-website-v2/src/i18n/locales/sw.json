@@ -14,7 +14,7 @@
     "h1Line1": "Tuambie unachotaka",
     "h1Line2": "kufanya.",
     "h1Gradient": "Tutashughulikia mengine.",
-    "subtitle": "LinkiSwap hubadilisha miamala ngumu ya blockchain kuwa matokeo rahisi ya kifedha. Nunua, uza, badilisha, tuma na toa pesa — bila kujali minyororo, madaraja, au gesi.",
+    "subtitle": "RecoilPay hubadilisha miamala ngumu ya blockchain kuwa matokeo rahisi ya kifedha. Nunua, uza, badilisha, tuma na toa pesa — bila kujali minyororo, madaraja, au gesi.",
     "ctaPrimary": "Fungua Programu",
     "ctaSecondary": "Chunguza V2 →",
     "trustLine": "Minyororo 12+ · Madaraja 0 kudhibiti · hakuna usumbufu wa gesi"
@@ -42,13 +42,13 @@
     "afterLabel": "Baada · Sema tu",
     "before": ["Chagua mnyororo", "Chagua daraja", "Chagua njia", "Lipa gesi", "Tekeleza"],
     "after": ["Tuma $100 kwa Amina", "Badilisha USDC kwa ETH", "Toa pesa benki", "Nunua kadi ya zawadi"],
-    "note": "LinkiSwap hupata njia bora ya utekelezaji kiotomatiki."
+    "note": "RecoilPay hupata njia bora ya utekelezaji kiotomatiki."
   },
   "how": {
     "label": "Jinsi Inavyofanya Kazi",
     "h2": "Imejengwa kwa nia.",
     "steps": [
-      { "title": "Unda nia", "desc": "Mwambie LinkiSwap matokeo unayoyataka — kwa maneno rahisi." },
+      { "title": "Unda nia", "desc": "Mwambie RecoilPay matokeo unayoyataka — kwa maneno rahisi." },
       { "title": "Gundua utekelezaji", "desc": "Soko hupata njia bora katika kila mnyororo." },
       { "title": "Wasolvers washindane", "desc": "Wasolvers wengi wanashindana kutekeleza nia yako, wa haraka na wa bei nafuu." },
       { "title": "Makubaliano", "desc": "Mali hufika mahali inapohitajika hasa." }
@@ -60,7 +60,7 @@
     "desc": "Kila nia hutangazwa kwenye soko la ushindani. Wasolvers wanashindana kutoa utekelezaji bora — daima unapata zabuni ya ushindi.",
     "benefits": ["Bei bora", "Utekelezaji wa haraka", "Ukwasi zaidi", "Uaminifu zaidi"],
     "userIntent": "Nia ya Mtumiaji",
-    "marketplaceLabel": "Soko la LinkiSwap",
+    "marketplaceLabel": "Soko la RecoilPay",
     "winner": "✓ Utekelezaji Bora Ushinde",
     "routeNote": "Njia bora · iliyochaguliwa na wasolvers",
     "solversNote": "●●● Wasolvers 3 wanashindana"
@@ -82,7 +82,7 @@
     "h2": "Kujenga tabaka la utekelezaji wa fedha kwa mali za kidijitali.",
     "tagline": "Mtandao una injini za utafutaji. · Wingu lina miundombinu. ·",
     "taglineHighlight": "Mali za kidijitali zinahitaji tabaka la utekelezaji.",
-    "desc": "LinkiSwap ni miundombinu inayounganisha watumiaji, watoa ukwasi na wasolvers katika mtandao mmoja uliounganishwa."
+    "desc": "RecoilPay ni miundombinu inayounganisha watumiaji, watoa ukwasi na wasolvers katika mtandao mmoja uliounganishwa."
   },
   "roadmap": {
     "label": "Ramani ya Barabara",
@@ -97,14 +97,14 @@
   "cta": {
     "h2Line1": "Acha kufanya miamala.",
     "h2Line2": "Anza kufikia matokeo.",
-    "desc": "Mwambie LinkiSwap unachotaka kufanya. Tutafikiri jinsi ya kufanya.",
+    "desc": "Mwambie RecoilPay unachotaka kufanya. Tutafikiri jinsi ya kufanya.",
     "launchApp": "Fungua Programu",
     "docs": "Soma nyaraka →"
   },
   "footer": {
     "tagline": "Fedha zinazoendeshwa na nia",
     "links": { "app": "Programu", "docs": "Nyaraka", "solvers": "Wasolvers", "twitter": "X / Twitter", "github": "GitHub" },
-    "copyright": "© 2026 LinkiSwap"
+    "copyright": "© 2026 RecoilPay"
   },
   "intentBar": {
     "phrases": [

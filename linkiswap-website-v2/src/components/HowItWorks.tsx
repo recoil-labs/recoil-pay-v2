@@ -1,90 +1,67 @@
-import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle2, PenLine, Search, Zap, type LucideIcon } from 'lucide-react';
-import RevealSection from './RevealSection';
-import { cn } from '@/lib/utils';
 
-const STEP_ICONS: LucideIcon[] = [PenLine, Search, Zap, CheckCircle2];
+import { Section, SectionHeading } from './SectionHeading';
+
+/* ── how it works ─────────────────────────────────────────────────────────
+   This was four glass cards each springing in on scroll with a 110ms
+   stagger, an auto-advancing "active" step on an interval, a pulsing icon
+   on whichever step was active, a gradient bar sweeping along a connector
+   line, and a hover lift. Five motions on one section, none of them telling
+   the reader anything — and because the cards were reveal-gated, the
+   section rendered as an empty void until scrolled to.
+
+   Now: the steps, numbered, on one hairline grid. The only motion left is
+   the rest of the page scrolling past it. A process is something to read
+   in order; it does not need to perform. */
+
+interface Step {
+  title: string;
+  desc: string;
+}
 
 export default function HowItWorks() {
   const { t } = useTranslation();
-  const steps = t('how.steps', { returnObjects: true }) as { title: string; desc: string }[];
-  const [activeStep, setActiveStep] = useState(0);
-
-  useEffect(() => {
-    if (steps.length === 0) return;
-    const id = setInterval(() => setActiveStep(step => (step + 1) % steps.length), 2400);
-    return () => clearInterval(id);
-  }, [steps.length]);
+  const raw = t('how.steps', { returnObjects: true }) as unknown;
+  const steps: Step[] = Array.isArray(raw) ? (raw as Step[]) : [];
 
   return (
-    <section id="how" className="section-shell border-y border-border bg-section-tint px-5 sm:px-8 lg:px-10">
-      <RevealSection>
-        <div className="mx-auto mb-16 max-w-[720px] text-center">
-          <span className="section-eyebrow">
-            {t('how.label')}
-          </span>
-          <h2 className="section-heading mt-4 text-[clamp(32px,4vw,54px)] tracking-normal">
-            {t('how.h2')}
-          </h2>
-        </div>
-      </RevealSection>
+    <Section id="how">
+      <SectionHeading
+        align="center"
+        eyebrow={t('how.label', 'how it works')}
+        title={t('how.h2', 'Built around intents')}
+        lede={t('how.lede', 'You say the outcome. The network works out the route, competes on it, and settles it — one signature.')}
+      />
 
-      <div className="relative mx-auto grid max-w-[1200px] grid-cols-1 gap-5 min-[581px]:grid-cols-2 min-[901px]:grid-cols-4 min-[901px]:gap-4 min-[901px]:before:absolute min-[901px]:before:left-[calc(12.5%+4px)] min-[901px]:before:right-[calc(12.5%+4px)] min-[901px]:before:top-[31px] min-[901px]:before:h-px min-[901px]:before:bg-[linear-gradient(90deg,var(--primary-dim),var(--border-cyan)_30%,var(--border-cyan)_70%,var(--primary-dim))] min-[901px]:before:content-['']">
-        <div className="pointer-events-none absolute left-[calc(12.5%+4px)] right-[calc(12.5%+4px)] top-[29px] z-[2] hidden h-[5px] overflow-hidden min-[901px]:block">
-          <div className="absolute top-0 h-full w-[28%] animate-timeline-scan bg-[linear-gradient(90deg,transparent,var(--accent-cyan),transparent)] motion-reduce:hidden" />
-        </div>
-
-        {steps.map((step, index) => {
-          const isActive = index === activeStep;
-          const Icon = STEP_ICONS[index % STEP_ICONS.length];
-          const stepNumber = String(index + 1).padStart(2, '0');
-
-          return (
-            <RevealSection key={step.title} delay={index * 110}>
-              <button
-                type="button"
-                onClick={() => setActiveStep(index)}
-                className={cn(
-                  'group flex h-full w-full cursor-pointer flex-col items-center rounded-[22px] p-5 text-center transition-[background,transform,box-shadow] duration-300 hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan/70',
-                  isActive
-                    ? 'glass-panel'
-                    : 'glass-card'
-                )}
-              >
-                <div className={cn(
-                  'relative z-[3] mb-5 flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full border transition-[background,border-color,box-shadow,color] duration-300',
-                  isActive
-                    ? 'animate-node-pulse border-transparent bg-[image:var(--gradient-cta)] text-btn-primary-text motion-reduce:animate-none'
-                    : 'border-border-cyan bg-surface text-text-muted'
-                )}>
-                  <Icon size={20} aria-hidden="true" />
-                </div>
-
-                <div className={cn(
-                  'mb-2 font-mono text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors duration-300',
-                  isActive ? 'text-accent-cyan' : 'text-text-muted'
-                )}>
-                  {t('how.stepLabel', { number: stepNumber, defaultValue: `Step ${stepNumber}` })}
-                </div>
-                <div className={cn(
-                  'mb-2.5 font-display text-lg font-semibold leading-[1.2] transition-colors duration-300',
-                  isActive ? 'text-app-text' : 'text-faint'
-                )}>
-                  {step.title}
-                </div>
-                <div className={cn(
-                  'text-sm leading-[1.6] transition-colors duration-300',
-                  isActive ? 'text-text-secondary' : 'text-faint-2'
-                )}>
-                  {step.desc}
-                </div>
-              </button>
-            </RevealSection>
-          );
-        })}
-      </div>
-
-    </section>
+      <ol className="mx-auto mt-14 grid max-w-5xl grid-cols-1 gap-x-10 sm:grid-cols-2 lg:grid-cols-4">
+        {steps.map((step, i) => (
+          <li
+            key={step.title}
+            // A top rule on every step gives the row a spine without cards.
+            className="border-t border-border pt-5 pb-8"
+          >
+            <p className="font-mono text-[11px] tabular-nums text-primary" style={{ letterSpacing: 'var(--tracking-ui)' }}>
+              {String(i + 1).padStart(2, '0')}
+            </p>
+            <h3
+              className="mt-3 font-sans text-lg text-app-text"
+              style={{
+                fontWeight: 'var(--font-heading-weight)' as unknown as number,
+                lineHeight: 'var(--leading-display)',
+                letterSpacing: 'var(--tracking-display)',
+              }}
+            >
+              {step.title}
+            </h3>
+            <p
+              className="mt-2 max-w-[32ch] font-sans text-sm text-text-secondary"
+              style={{ lineHeight: 'var(--leading-body)', letterSpacing: 'var(--tracking-body)' }}
+            >
+              {step.desc}
+            </p>
+          </li>
+        ))}
+      </ol>
+    </Section>
   );
 }

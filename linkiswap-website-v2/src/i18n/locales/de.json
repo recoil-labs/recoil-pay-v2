@@ -14,7 +14,7 @@
     "h1Line1": "Sagen Sie uns, was Sie",
     "h1Line2": "tun möchten.",
     "h1Gradient": "Den Rest erledigen wir.",
-    "subtitle": "LinkiSwap verwandelt komplexe Blockchain-Transaktionen in einfache Finanzergebnisse. Kaufen, verkaufen, tauschen, senden und auszahlen — ohne sich um Chains, Bridges oder Gas zu sorgen.",
+    "subtitle": "RecoilPay verwandelt komplexe Blockchain-Transaktionen in einfache Finanzergebnisse. Kaufen, verkaufen, tauschen, senden und auszahlen — ohne sich um Chains, Bridges oder Gas zu sorgen.",
     "ctaPrimary": "App starten",
     "ctaSecondary": "V2 erkunden →",
     "trustLine": "12+ Chains · 0 Bridges zu verwalten · kein Gas-Management"
@@ -42,13 +42,13 @@
     "afterLabel": "Nachher · Einfach sagen",
     "before": ["Chain wählen", "Bridge wählen", "Route wählen", "Gas bezahlen", "Ausführen"],
     "after": ["100 € an Max senden", "USDC gegen ETH tauschen", "Auf mein Konto auszahlen", "Eine Geschenkkarte kaufen"],
-    "note": "LinkiSwap findet automatisch den optimalen Ausführungsweg."
+    "note": "RecoilPay findet automatisch den optimalen Ausführungsweg."
   },
   "how": {
     "label": "So Funktioniert's",
     "h2": "Auf Intents aufgebaut.",
     "steps": [
-      { "title": "Intent erstellen", "desc": "Sagen Sie LinkiSwap in einfachen Worten, was Sie erreichen möchten." },
+      { "title": "Intent erstellen", "desc": "Sagen Sie RecoilPay in einfachen Worten, was Sie erreichen möchten." },
       { "title": "Ausführung finden", "desc": "Der Marktplatz findet den besten Weg auf jeder Chain." },
       { "title": "Solver konkurrieren", "desc": "Mehrere Solver bieten auf Ihren Intent — der schnellste und günstigste gewinnt." },
       { "title": "Abwicklung", "desc": "Assets kommen genau dort an, wo sie hinmüssen." }
@@ -60,7 +60,7 @@
     "desc": "Jeder Intent wird an einen Wettbewerbsmarkt übertragen. Solver konkurrieren um die beste Ausführung — Sie erhalten immer das Gewinngebot.",
     "benefits": ["Bessere Preise", "Schnellere Ausführung", "Tiefere Liquidität", "Mehr Zuverlässigkeit"],
     "userIntent": "Nutzer-Intent",
-    "marketplaceLabel": "LinkiSwap Marktplatz",
+    "marketplaceLabel": "RecoilPay Marktplatz",
     "winner": "✓ Beste Ausführung gewinnt",
     "routeNote": "Beste Route · von Solvern gewählt",
     "solversNote": "●●● 3 Solver konkurrieren"
@@ -82,7 +82,7 @@
     "h2": "Aufbau der Finanzausführungsschicht für digitale Assets.",
     "tagline": "Das Internet hat Suchmaschinen. · Die Cloud hat Infrastruktur. ·",
     "taglineHighlight": "Digitale Assets brauchen eine Ausführungsschicht.",
-    "desc": "LinkiSwap ist die Infrastruktur, die Nutzer, Liquiditätsanbieter und Solver in einem einheitlichen Netzwerk verbindet."
+    "desc": "RecoilPay ist die Infrastruktur, die Nutzer, Liquiditätsanbieter und Solver in einem einheitlichen Netzwerk verbindet."
   },
   "roadmap": {
     "label": "Roadmap",
@@ -97,14 +97,14 @@
   "cta": {
     "h2Line1": "Hören Sie auf zu transagieren.",
     "h2Line2": "Fangen Sie an, Ergebnisse zu erzielen.",
-    "desc": "Sagen Sie LinkiSwap, was Sie tun möchten. Wir finden heraus, wie.",
+    "desc": "Sagen Sie RecoilPay, was Sie tun möchten. Wir finden heraus, wie.",
     "launchApp": "App starten",
     "docs": "Dokumentation lesen →"
   },
   "footer": {
     "tagline": "Intentionsbasierte Finanzen",
     "links": { "app": "App", "docs": "Docs", "solvers": "Solver", "twitter": "X / Twitter", "github": "GitHub" },
-    "copyright": "© 2026 LinkiSwap"
+    "copyright": "© 2026 RecoilPay"
   },
   "intentBar": {
     "phrases": [

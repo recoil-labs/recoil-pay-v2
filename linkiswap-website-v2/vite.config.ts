@@ -15,19 +15,19 @@ export default defineConfig({
     },
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:4000",
+        target: "https://recoil-aggregator-675174162902.us-central1.run.app",
         changeOrigin: true,
       },
       "/solver-api": {
-        target: "http://127.0.0.1:4000",
+        target: "https://recoil-aggregator-675174162902.us-central1.run.app",
         changeOrigin: true,
       },
       "/quotes": {
-        target: "http://127.0.0.1:4000",
+        target: "https://recoil-aggregator-675174162902.us-central1.run.app",
         changeOrigin: true,
       },
       "/ws": {
-        target: "ws://127.0.0.1:4000",
+        target: "wss://recoil-aggregator-675174162902.us-central1.run.app",
         ws: true,
         changeOrigin: true,
       },
