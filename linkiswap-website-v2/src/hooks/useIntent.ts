@@ -80,6 +80,10 @@ export interface IntentPreview {
   recipient?: string;
   etaSeconds?: number;
   solverCount: number;
+  /** How many solvers the aggregator asked (from AggregationMetadata). */
+  solversQueried?: number;
+  /** Wall-clock time the quote race took, in ms. */
+  raceMs?: number;
 }
 
 export interface UseIntentState {
@@ -350,6 +354,8 @@ export function useIntent(): UseIntentState {
           recipient: raw.action === 'send' ? resolvedIntent.recipient : undefined,
           etaSeconds: best.eta,
           solverCount: res.totalQuotes || res.quotes.length || 1,
+          solversQueried: res.metadata?.solversQueried,
+          raceMs: res.metadata?.totalDurationMs,
         };
 
         // Escrow route needs a Permit2 approval; 3009 (the live route) does not.

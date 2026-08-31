@@ -105,9 +105,23 @@ export default function IntentConfirmCard({
 
       <div className="mx-5 mb-5 grid grid-cols-1 gap-2 rounded-2xl bg-surface-input p-3 sm:grid-cols-3">
         <MetaItem label="Settlement" value={preview.etaSeconds ? `~${preview.etaSeconds}s` : 'Fast'} />
-        <MetaItem label="Solvers" value={`${preview.solverCount}`} accent />
+        <MetaItem
+          label="Solvers"
+          value={
+            preview.solversQueried && preview.solversQueried > preview.solverCount
+              ? `${preview.solverCount} of ${preview.solversQueried} quoted`
+              : `${preview.solverCount} quoted`
+          }
+          accent
+        />
         <MetaItem label="Action" value={send ? 'Send' : 'Swap'} />
       </div>
+
+      {typeof preview.raceMs === 'number' && preview.raceMs > 0 && (
+        <p className="mx-5 -mt-3 mb-5 font-mono text-[11px] text-text-muted">
+          quote race ran {Math.round(preview.raceMs)}ms across the marketplace
+        </p>
+      )}
 
       {send && preview.recipient && (
         <div className="mx-5 mb-5 rounded-2xl bg-surface-input px-4 py-3 font-sans text-[12.5px] text-text-secondary">

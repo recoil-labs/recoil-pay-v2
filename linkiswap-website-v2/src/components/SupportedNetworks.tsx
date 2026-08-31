@@ -77,7 +77,7 @@ export default function SupportedNetworks() {
       <Reveal>
         <SectionHeading
           align="center"
-          eyebrow="coverage"
+          eyebrow="networks"
           title={t('networks.h2', 'Networks the parser understands')}
           lede={t('networks.subtitle', 'Name any of these in an intent and the aggregator will route across it.')}
         />
