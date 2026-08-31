@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 
 import IntentBar from './IntentBar';
 import { CHAIN_ALIASES } from '../intent/registry';
+import { useSolvers } from '../hooks/useSolvers';
+import { CountUp } from './motion/Reveal';
 
 // The particle field pulls in WebGL setup and ~20KB of shader/noise code.
 // The intent bar is what people came for and should paint first; the field
@@ -66,29 +68,6 @@ function useTypewriter(
   return { text: reduced ? words[0] : text, reduced, holding: phase === 'holding' };
 }
 
-/** Live solver count from the aggregator. Shown only when it resolves —
- *  a dash or a zero would read as "nothing is running", which is worse
- *  than not showing the row. */
-function useSolverCount() {
-  const [count, setCount] = useState<number | null>(null);
-  useEffect(() => {
-    const base = (import.meta.env.VITE_OIF_API_BASE_URL as string | undefined)?.replace(/\/$/, '');
-    if (!base) return;
-    const ac = new AbortController();
-    fetch(`${base}/api/v1/solvers`, { signal: ac.signal })
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => {
-        const list = Array.isArray(d) ? d : d?.solvers;
-        if (Array.isArray(list)) {
-          setCount(list.filter((s: { status?: string }) => s.status === 'active').length);
-        }
-      })
-      .catch(() => {});
-    return () => ac.abort();
-  }, []);
-  return count;
-}
-
 /** Distinct chains the parser will resolve, derived from the registry so
  *  the number can never drift from what the input actually accepts. */
 const CHAIN_COUNT = new Set(Object.values(CHAIN_ALIASES).map(c => c.id)).size;
@@ -100,10 +79,17 @@ const LONGEST = Math.max(...VERBS.map(v => v.length));
 export default function Hero() {
   const { t } = useTranslation();
   const { text, reduced, holding } = useTypewriter(VERBS);
-  const solvers = useSolverCount();
+  const { activeCount: solvers } = useSolvers();
 
   return (
     <section className="relative isolate overflow-hidden px-5 pb-16 pt-14 sm:px-8 sm:pb-20 sm:pt-20 lg:px-10">
+      {/* Blueprint grid on the ground layer, particles above it. The grid
+          gives the field something to sit on — alone on flat ground the
+          particles read as sparse rather than as spacious. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-20 [background-image:linear-gradient(var(--grid-line)_1px,transparent_1px),linear-gradient(90deg,var(--grid-line)_1px,transparent_1px)] [background-size:64px_64px] [mask-image:radial-gradient(70%_58%_at_50%_36%,#000_0%,transparent_80%)]"
+      />
       <div
         className="pointer-events-none absolute inset-0 -z-10 [mask-image:linear-gradient(to_bottom,#000_60%,transparent_100%)]"
         aria-hidden="true"
@@ -168,13 +154,13 @@ export default function Hero() {
           {solvers !== null && (
             <div className="flex items-baseline gap-2">
               <dt className="sr-only">Solvers online</dt>
-              <dd className="font-sans text-2xl tabular-nums text-app-text" style={{ letterSpacing: 'var(--tracking-display)' }}>{solvers}</dd>
+              <dd className="font-sans text-2xl tabular-nums text-app-text" style={{ letterSpacing: 'var(--tracking-display)' }}><CountUp to={solvers} /></dd>
               <dd className="font-sans text-xs text-text-muted" style={{ letterSpacing: 'var(--tracking-ui)' }}>solvers online</dd>
             </div>
           )}
           <div className="flex items-baseline gap-2">
             <dt className="sr-only">Chains</dt>
-            <dd className="font-sans text-2xl tabular-nums text-app-text" style={{ letterSpacing: 'var(--tracking-display)' }}>{CHAIN_COUNT}</dd>
+            <dd className="font-sans text-2xl tabular-nums text-app-text" style={{ letterSpacing: 'var(--tracking-display)' }}><CountUp to={CHAIN_COUNT} /></dd>
             <dd className="font-sans text-xs text-text-muted" style={{ letterSpacing: 'var(--tracking-ui)' }}>chains</dd>
           </div>
           <div className="flex items-baseline gap-2">

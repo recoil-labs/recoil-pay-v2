@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Check } from 'lucide-react';
 
 import { Section, SectionHeading } from './SectionHeading';
+import { Reveal } from './motion/Reveal';
 
 /* ── solver marketplace ───────────────────────────────────────────────────
    This used to render a staged auction: "Solver A / B / C" with invented
@@ -68,7 +69,7 @@ export default function SolverMarketplace() {
   return (
     <Section id="marketplace">
       <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
-        <div>
+        <Reveal>
           <SectionHeading
             eyebrow="solvers"
             title={t('market.h2')}
@@ -92,8 +93,9 @@ export default function SolverMarketplace() {
             {t('market.runSolver', 'Run a solver')}
             <span aria-hidden="true">→</span>
           </a>
-        </div>
+        </Reveal>
 
+        <Reveal delay={0.08}>
         <div className="rounded-lg border border-border bg-surface">
           <div className="flex items-center justify-between border-b border-border px-5 py-3">
             <span className="font-mono text-[11px] text-text-muted" style={{ letterSpacing: 'var(--tracking-ui)' }}>
@@ -158,6 +160,7 @@ export default function SolverMarketplace() {
             </ul>
           )}
         </div>
+        </Reveal>
       </div>
     </Section>
   );

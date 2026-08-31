@@ -741,3 +741,12 @@ body {
 @keyframes hero-caret-blink { 50% { opacity: 0; } }
 .hero-caret { animation: hero-caret-blink 1.05s steps(1, end) infinite; }
 @media (prefers-reduced-motion: reduce) { .hero-caret { animation: none; } }
+
+/* Networks marquee: one full list-width per loop; still under reduced motion. */
+@keyframes networks-marquee {
+  to { transform: translateX(-50%); }
+}
+.networks-marquee { animation: networks-marquee 36s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .networks-marquee { animation: none; }
+}

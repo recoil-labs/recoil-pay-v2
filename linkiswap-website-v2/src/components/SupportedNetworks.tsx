@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { CHAIN_ALIASES, type CanonicalChain } from '../intent/registry';
 import { Section, SectionHeading } from './SectionHeading';
+import { Reveal } from './motion/Reveal';
 
 /* ── supported networks ───────────────────────────────────────────────────
    Was a marquee of thirteen chains including Bitcoin, TON, Tron and Sui —
@@ -73,19 +74,28 @@ export default function SupportedNetworks() {
 
   return (
     <Section id="networks" divide={false}>
-      <SectionHeading
-        align="center"
-        eyebrow="coverage"
-        title={t('networks.h2', 'Networks the parser understands')}
-        lede={t('networks.subtitle', 'Name any of these in an intent and the aggregator will route across it.')}
-      />
+      <Reveal>
+        <SectionHeading
+          align="center"
+          eyebrow="coverage"
+          title={t('networks.h2', 'Networks the parser understands')}
+          lede={t('networks.subtitle', 'Name any of these in an intent and the aggregator will route across it.')}
+        />
+      </Reveal>
 
-      {/* A static wrapped grid, not a marquee. There are few enough chains
-          that scrolling them would be theatre; a reader should be able to
-          scan the whole set in one look and count it. */}
-      <ul className="mx-auto mt-12 flex max-w-4xl flex-wrap justify-center gap-3">
-        {chains.map(c => <ChainChip key={c.id} chain={c} />)}
-      </ul>
+      {/* A slow marquee, li.fi-style: the row drifts, pauses on hover, and
+          holds still under reduced motion. The list renders twice so the
+          loop point is invisible; the duplicate is aria-hidden. */}
+      <div className="group relative mt-12 overflow-hidden [mask-image:linear-gradient(to_right,transparent,#000_8%,#000_92%,transparent)]">
+        <div className="networks-marquee flex w-max gap-3 pe-3 group-hover:[animation-play-state:paused]">
+          <ul className="flex shrink-0 gap-3">
+            {chains.map(c => <ChainChip key={c.id} chain={c} />)}
+          </ul>
+          <ul className="flex shrink-0 gap-3" aria-hidden="true">
+            {chains.map(c => <ChainChip key={`dup-${c.id}`} chain={c} />)}
+          </ul>
+        </div>
+      </div>
 
       <p className="mt-6 text-center font-sans text-xs text-text-muted" style={{ letterSpacing: 'var(--tracking-ui)' }}>
         {chains.length} {chains.length === 1 ? 'network' : 'networks'} · derived from the intent registry

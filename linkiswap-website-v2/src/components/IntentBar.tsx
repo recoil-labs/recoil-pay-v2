@@ -7,6 +7,8 @@ import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useIntent } from '../hooks/useIntent';
+import { useSolvers } from '../hooks/useSolvers';
+import { extractEntities } from '../intent/highlight';
 import IntentConfirmCard from './IntentConfirmCard';
 import OrderStatus from './OrderStatus';
 import SwapCompleteModal from './SwapCompleteModal';
@@ -101,6 +103,8 @@ export default function IntentBar() {
 
   const [value, setValue] = useState('');
   const [focused, setFocused] = useState(false);
+  const { activeCount } = useSolvers();
+  const entities = useMemo(() => (value.trim() ? extractEntities(value) : []), [value]);
 
   const animated = usePlaceholder(phrases, focused || value.length > 0);
   const placeholder = focused ? 'swap 1 USDC on OP Sepolia for USDC on Base Sepolia' : animated;
@@ -131,10 +135,26 @@ export default function IntentBar() {
       */}
       <div
         className={cn(
-          'rounded-lg border bg-surface transition-[border-color] duration-150',
-          focused ? 'border-primary' : 'border-border',
+          'rounded-lg border bg-surface transition-[border-color,box-shadow] duration-150',
+          focused
+            ? 'border-primary shadow-[0_0_0_3px_var(--primary-dim),0_24px_80px_-48px_var(--shadow-color)]'
+            : 'border-border shadow-[0_18px_60px_-52px_var(--shadow-color)]',
         )}
       >
+        {/* Quiet header: what this surface is, and that something real is
+            listening on the other side. The count is the same live figure
+            the hero shows — one shared request, not a second fetch. */}
+        <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+          <span className="font-mono text-[11px] text-text-muted" style={{ letterSpacing: 'var(--tracking-ui)' }}>
+            <span className="opacity-50">/</span>intent
+          </span>
+          {activeCount !== null && activeCount > 0 && (
+            <span className="flex items-center gap-1.5 font-sans text-[11px] text-text-secondary" style={{ letterSpacing: 'var(--tracking-ui)' }}>
+              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: '#3fb98f' }} />
+              {activeCount} solver{activeCount === 1 ? '' : 's'} listening
+            </span>
+          )}
+        </div>
         <div className="flex items-end gap-2 p-2">
           <Input
             className="min-h-[56px] flex-1 border-0 bg-transparent px-3 font-sans text-[15px] text-app-text placeholder:text-text-muted focus-visible:ring-0 focus-visible:ring-offset-0 sm:text-base"
@@ -166,6 +186,26 @@ export default function IntentBar() {
             <ArrowRight size={18} aria-hidden="true" />
           </Button>
         </div>
+
+        {/* Live recognition: the registry's own vocabulary, lit up as it is
+            typed. Not a parse — structure is still the parser's job — but it
+            shows the machine keeping pace with the sentence. */}
+        {value.trim().length > 0 && entities.length > 0 && intent.phase === 'idle' && (
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-border px-4 py-2.5">
+            <span className="me-1 font-mono text-[10px] text-text-muted" style={{ letterSpacing: 'var(--tracking-ui)' }}>
+              recognised
+            </span>
+            {entities.map((e, i) => (
+              <span
+                key={`${e.kind}-${e.start}-${i}`}
+                className="inline-flex items-baseline gap-1 rounded-sm bg-[var(--chip-bg)] px-1.5 py-0.5 font-mono text-[11px] text-app-text"
+              >
+                <span className="text-text-muted">{e.kind}</span>
+                <span className="text-primary">{e.canonical}</span>
+              </span>
+            ))}
+          </div>
+        )}
 
         {intent.phase === 'idle' && !intent.assetsError && (
           <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1.5 border-t border-border px-4 py-3">

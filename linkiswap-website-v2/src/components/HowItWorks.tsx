@@ -1,6 +1,9 @@
 import { useTranslation } from 'react-i18next';
 
+import { motion } from 'framer-motion';
+
 import { Section, SectionHeading } from './SectionHeading';
+import { Reveal, VIEWPORT, container, hairline, item } from './motion/Reveal';
 
 /* ── how it works ─────────────────────────────────────────────────────────
    This was four glass cards each springing in on scroll with a 110ms
@@ -26,20 +29,36 @@ export default function HowItWorks() {
 
   return (
     <Section id="how">
-      <SectionHeading
-        align="center"
-        eyebrow={t('how.label', 'how it works')}
-        title={t('how.h2', 'Built around intents')}
-        lede={t('how.lede', 'You say the outcome. The network works out the route, competes on it, and settles it — one signature.')}
-      />
+      <Reveal>
+        <SectionHeading
+          align="center"
+          eyebrow={t('how.label', 'how it works')}
+          title={t('how.h2', 'Built around intents')}
+          lede={t('how.lede', 'You say the outcome. The network works out the route, competes on it, and settles it — one signature.')}
+        />
+      </Reveal>
 
-      <ol className="mx-auto mt-14 grid max-w-5xl grid-cols-1 gap-x-10 sm:grid-cols-2 lg:grid-cols-4">
+      <motion.ol
+        className="mx-auto mt-14 grid max-w-5xl grid-cols-1 gap-x-10 sm:grid-cols-2 lg:grid-cols-4"
+        initial="hidden"
+        whileInView="show"
+        viewport={VIEWPORT}
+        variants={container}
+      >
         {steps.map((step, i) => (
-          <li
+          <motion.li
             key={step.title}
-            // A top rule on every step gives the row a spine without cards.
-            className="border-t border-border pt-5 pb-8"
+            variants={item}
+            // The spine each step sits on draws in left-to-right as the
+            // step arrives — the one flourish, and it is made of the same
+            // hairline the rest of the page is built from.
+            className="relative pt-5 pb-8"
           >
+            <motion.span
+              aria-hidden="true"
+              variants={hairline}
+              className="absolute inset-x-0 top-0 h-px origin-left bg-border"
+            />
             <p className="font-mono text-[11px] tabular-nums text-primary" style={{ letterSpacing: 'var(--tracking-ui)' }}>
               {String(i + 1).padStart(2, '0')}
             </p>
@@ -59,9 +78,9 @@ export default function HowItWorks() {
             >
               {step.desc}
             </p>
-          </li>
+          </motion.li>
         ))}
-      </ol>
+      </motion.ol>
     </Section>
   );
 }
