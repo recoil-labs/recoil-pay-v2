@@ -21,10 +21,7 @@ COPY . .
 
 # Build with cargo cache mounts for faster rebuilds
 # If FEATURES is set, add --features flag
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/usr/app/target \
-    if [ -n "$FEATURES" ]; then \
+RUN if [ -n "$FEATURES" ]; then \
       cargo install --root /usr/app --path crates/solver-service --features "$FEATURES" --locked; \
     else \
       cargo install --root /usr/app --path crates/solver-service --locked; \
