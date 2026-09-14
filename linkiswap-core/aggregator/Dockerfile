@@ -14,8 +14,7 @@ RUN apk update && apk add --no-cache \
 ENV PKG_CONFIG_PATH=/usr/lib/pkgconfig
 
 # Install cargo-chef reproducibly so CI does not resolve crates that require a newer rustc
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    cargo install --locked cargo-chef
+RUN cargo install --locked cargo-chef
 
 WORKDIR /app
 
@@ -42,9 +41,7 @@ COPY --from=planner /app/recipe.json recipe.json
 # it the binary silently falls back to `MemoryStore` even when
 # `DATABASE_URL` is set, which means operator/quote rows live in RAM and
 # vanish on every redeploy.
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/app/target \
-    cargo chef cook --release --features postgres --recipe-path recipe.json
+RUN cargo chef cook --release --features postgres --recipe-path recipe.json
 
 # Copy source code and build the application
 COPY Cargo.toml Cargo.lock ./
@@ -55,9 +52,7 @@ COPY src/ ./src/
 # Build the aggregator in release mode with cache mounts. Same feature
 # flag as the cook step above so the two binaries are linked against the
 # same set of crates.
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/app/target \
-    cargo build --release --features postgres && \
+RUN cargo build --release --features postgres && \
     cp /app/target/release/oif-aggregator /usr/local/bin/oif-aggregator
 
 # Build the fill-worker (multi-tenant operator binary). Render deploys
@@ -66,9 +61,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 # `dockerCommand: /usr/local/bin/fill-worker`. Operators don't run this
 # binary themselves — it's hosted by us, signs fills via the aggregator's
 # /sign-fill endpoint using each operator's encrypted fill-wallet key.
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/app/target \
-    cargo build --release -p fill-worker && \
+RUN cargo build --release -p fill-worker && \
     cp /app/target/release/fill-worker /usr/local/bin/fill-worker
 
 # Runtime stage - using Chainguard's minimal Wolfi base
