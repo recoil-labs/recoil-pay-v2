@@ -15,7 +15,7 @@ import { Reveal } from './motion/Reveal';
    say more than three fictional ones, and the number grows on its own as
    operators onboard through the portal linked below. */
 
-const PORTAL = 'https://recoil-solver-portal-675174162902.us-central1.run.app';
+const PORTAL = 'https://solver.recoilpay.com';
 
 interface Solver {
   solverId: string;

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Reveal } from './motion/Reveal';
 
-const SOLVER_PORTAL_URL = 'https://recoil-solver-portal-675174162902.us-central1.run.app';
+const SOLVER_PORTAL_URL = 'https://solver.recoilpay.com';
 
 /* ── the close ────────────────────────────────────────────────────────────
    li.fi and Rubic both end on a call, and they are right to: after five

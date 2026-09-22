@@ -53,7 +53,7 @@ export default function Nav() {
     { label: t('nav.marketplace', 'Solvers'), href: '#marketplace' },
     { label: t('nav.networks', 'Networks'), href: '#networks' },
     { label: t('nav.developers', 'Developers'), href: '#developers' },
-    { label: t('nav.solverPortal', 'Run a solver'), href: 'https://recoil-solver-portal-675174162902.us-central1.run.app', external: true },
+    { label: t('nav.solverPortal', 'Run a solver'), href: 'https://solver.recoilpay.com', external: true },
   ];
 
   return (
