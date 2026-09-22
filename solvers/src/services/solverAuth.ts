@@ -77,7 +77,7 @@ export class SolverAuthService {
     const user: SolverOperatorUser = {
       id: solverId,
       username,
-      email: username.includes('@') ? username : `${username}@linkiswap.io`,
+      email: username.includes('@') ? username : `${username}@recoilpay.io`,
       role: 'solver_operator',
       apiKey: `sk_${solverId.slice(0, 16)}`,
       solverId,

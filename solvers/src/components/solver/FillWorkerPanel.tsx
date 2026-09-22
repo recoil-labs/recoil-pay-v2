@@ -81,7 +81,7 @@ export const FillWorkerPanel: React.FC = () => {
           <div>
             <h3 className="font-headline text-xl font-bold text-white">Fill-Worker Status</h3>
             <p className="text-xs text-[#c6c5d9] mt-0.5">
-              Hosted by Linkiswap Core. Nothing to configure, nothing to deploy.
+              Hosted by RecoilPay. Nothing to configure, nothing to deploy.
             </p>
           </div>
         </div>
@@ -89,7 +89,7 @@ export const FillWorkerPanel: React.FC = () => {
         <div className="space-y-4 font-mono">
           <div className="space-y-2">
             <p className="text-xs text-[#c6c5d9] leading-relaxed">
-              Every fill your quotes win is signed and broadcast by Linkiswap's
+              Every fill your quotes win is signed and broadcast by RecoilPay's
               hosted fill-worker. The aggregator holds your encrypted fill-wallet
               key and signs each transaction on your behalf. There is no worker
               binary for you to download, no env vars to set, no machine to keep
@@ -148,7 +148,7 @@ export const FillWorkerPanel: React.FC = () => {
       <div className="glass-panel rounded-2xl p-6 bg-[#151f37]/60 border border-[#454556]/30 shadow-xl">
         <h4 className="text-sm font-bold text-white font-headline mb-3">How fills are signed</h4>
         <p className="text-xs text-[#c6c5d9] leading-relaxed">
-          Every fill your quotes win is signed and broadcast by Linkiswap's
+          Every fill your quotes win is signed and broadcast by RecoilPay's
           hosted fill-worker. The aggregator holds your encrypted fill-wallet
           key and signs each transaction on your behalf. There is no worker
           binary for you to download, no env vars to set, no machine to keep

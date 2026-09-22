@@ -5,7 +5,7 @@ import { themes as prismThemes } from 'prism-react-renderer';
 const config: Config = {
   title: 'RecoilPay Docs',
   tagline: 'Cross-chain swaps in plain English.',
-  favicon: 'img/favicon.svg',
+  favicon: 'img/favicon.png',
 
   // Set to the public URL once you have one; safe defaults for local + Render preview.
   url: 'https://docs.recoilpay.com',
@@ -45,7 +45,7 @@ const config: Config = {
   ],
 
   themeConfig: {
-    image: 'img/logo.svg',
+    image: 'img/og-image.png',
     colorMode: {
       defaultMode: 'dark',
       respectPrefersColorScheme: true,
@@ -54,7 +54,7 @@ const config: Config = {
       title: 'RecoilPay',
       logo: {
         alt: 'RecoilPay',
-        src: 'img/logo.svg',
+        src: 'img/logo.png',
       },
       items: [
         {

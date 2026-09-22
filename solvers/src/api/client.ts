@@ -3,9 +3,9 @@ import type { ApiError } from '../types/api';
 
 // Prefer the env-configured base URL (production aggregator), fall through
 // to the Vite dev-server proxy (empty string → relative path) when running
-// locally. The historical whitelist for `linkiswap-admin.onrender.com` is
+// locally. The historical whitelist for `recoilpay-admin.onrender.com` is
 // gone — the dashboard now talks to the live OIF aggregator at
-// linkiswap-aggregator.onrender.com.
+// recoilpay-aggregator.onrender.com.
 const getApiBaseUrl = () => {
     const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_OIF_API_BASE_URL;
     return envUrl || '';

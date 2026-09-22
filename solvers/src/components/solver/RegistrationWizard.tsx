@@ -359,7 +359,7 @@ export const RegistrationWizard: React.FC<RegistrationWizardProps> = ({ onRegist
                   </div>
                   <h2 className="font-headline text-2xl font-bold text-white">You're registered!</h2>
                   <p className="text-[#c6c5d9] text-sm max-w-md mx-auto font-mono">
-                    Wallet <code className="text-[#bfc2ff]">{address}</code> is now on Linkiswap Core.
+                    Wallet <code className="text-[#bfc2ff]">{address}</code> is now on RecoilPay.
                   </p>
                 </div>
 

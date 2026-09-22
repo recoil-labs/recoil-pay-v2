@@ -20,11 +20,7 @@ interface LogoProps {
 export default function Logo({ height = 22, markOnly = false }: LogoProps) {
   return (
     <span className="inline-flex items-center gap-2 select-none" aria-label="RecoilPay">
-      <svg width={height} height={height} viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0">
-        <rect width="24" height="24" rx="7" fill="var(--primary)" />
-        <path d="M6.5 9.5h9.5M13.2 6.6l3 2.9-3 2.9" stroke="var(--app-bg)" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M17.5 14.5H8M10.8 17.4l-3-2.9 3-2.9" stroke="var(--app-bg)" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" opacity="0.72" />
-      </svg>
+      <img src="/logo.png" alt="" width={height} height={height} aria-hidden="true" className="shrink-0 rounded-[22%]" />
 
       {!markOnly && (
         <span className="flex items-baseline gap-1.5">

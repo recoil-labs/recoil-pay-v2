@@ -15,7 +15,7 @@ export const authzApi = {
         return {
             user_id: op?.id || 'op_101',
             username: op?.username || 'solver_admin',
-            email: op?.email || 'operator@linkiswap.io',
+            email: op?.email || 'operator@recoilpay.io',
             roles: [ROLES.ADMIN],
             permissions: [PERMISSIONS.CONFIG_WRITE, PERMISSIONS.AUDIT_READ],
             auth_level: 'normal',
@@ -59,7 +59,7 @@ export const authzApi = {
         return [
             {
                 id: op?.id || 'op_101',
-                email: op?.email || 'operator@linkiswap.io',
+                email: op?.email || 'operator@recoilpay.io',
                 username: op?.username || 'solver_admin',
                 role: ROLES.ADMIN,
                 mfa_enabled: false,

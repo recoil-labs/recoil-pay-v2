@@ -97,7 +97,7 @@ export const ConnectPage: React.FC = () => {
 							account_balance_wallet
 						</span>
 						<h1 className="font-headline text-2xl font-bold text-white">
-							LinkiSwap Solver
+							RecoilPay Solver
 						</h1>
 					</div>
 					<p className="text-sm text-[#c6c5d9]">

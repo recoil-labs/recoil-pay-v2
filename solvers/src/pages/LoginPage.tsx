@@ -59,7 +59,7 @@ export const LoginPage: React.FC = () => {
               account_balance_wallet
             </span>
             <h1 className="font-headline text-3xl text-white font-extrabold tracking-tight">
-              Linkiswap
+              RecoilPay
             </h1>
           </div>
           <p className="text-[#c6c5d9] text-sm">Solver Portal Access</p>
@@ -84,7 +84,7 @@ export const LoginPage: React.FC = () => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="solver@linkiswap.com"
+                  placeholder="solver@recoilpay.com"
                   className="w-full bg-transparent border-none py-3.5 pl-12 pr-4 text-white text-xs font-bold focus:outline-none placeholder-[#8f8fa2]/50"
                 />
               </div>
@@ -155,7 +155,7 @@ export const LoginPage: React.FC = () => {
           <button
             type="button"
             onClick={() => {
-              setAuth('web3_demo_token', { username: 'solver_hardware.eth', email: 'hardware@linkiswap.com' } as UserIdentity);
+              setAuth('web3_demo_token', { username: 'solver_hardware.eth', email: 'hardware@recoilpay.com' } as UserIdentity);
               queryClient.invalidateQueries({ queryKey: ['self'] }).then(() => {
                 navigate('/', { replace: true });
               });

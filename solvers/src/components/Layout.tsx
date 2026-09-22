@@ -78,7 +78,7 @@ export const Layout: React.FC = () => {
         {/* Brand Header */}
         <div className="p-6 md:p-8 flex items-center justify-between">
           <div className="flex flex-col gap-1.5">
-            <img src="/logo.svg" alt="Linkiswap" className="h-6 w-auto" />
+            <img src="/logo.png" alt="RecoilPay" className="h-7 w-7 rounded-md" />
             <p className="text-[9px] uppercase tracking-[0.25em] text-[#bfc2ff] font-semibold font-mono opacity-80 pl-0.5">
               Intent Portal
             </p>
@@ -170,7 +170,7 @@ export const Layout: React.FC = () => {
 
             <div>
               <h2 className="font-headline text-lg md:text-xl font-bold text-white tracking-tight">
-                Linkiswap Solver Portal
+                RecoilPay Solver Portal
               </h2>
             </div>
           </div>

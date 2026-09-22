@@ -12,7 +12,7 @@ const envProjectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
 const projectId = envProjectId && envProjectId !== '' ? envProjectId : 'e0a1b3a2a85284ebdca25f4bbdab1efe';
 
 export const wagmiConfig = getDefaultConfig({
-  appName: 'Linkiswap Solver Portal',
+  appName: 'RecoilPay Solver Portal',
   appDescription: 'Cross-chain swaps and transfers',
   projectId,
   chains: [optimismSepolia, baseSepolia, mainnet, sepolia],

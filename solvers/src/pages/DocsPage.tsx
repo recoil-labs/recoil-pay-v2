@@ -59,7 +59,7 @@ const SECTIONS: Section[] = [
     body: (
       <>
         <p>
-          LinkiSwap is a marketplace for cross-chain swaps. Users describe what they want
+          RecoilPay is a marketplace for cross-chain swaps. Users describe what they want
           ("swap 100 USDC on OP Sepolia for USDC on Base Sepolia") and{' '}
           <b className="text-white">you compete to fill it with your own inventory</b>. You
           are the liquidity.

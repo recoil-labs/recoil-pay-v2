@@ -29,9 +29,9 @@ export const DashboardPage: React.FC = () => {
               <div className="inline-block px-2.5 py-0.5 rounded bg-[#424af6] text-white text-[10px] font-bold uppercase tracking-wider mb-1">
                 SOLVER SETUP REQUIRED
               </div>
-              <h2 className="text-xl font-bold text-white font-headline">Welcome to Linkiswap! Finish Account Setup</h2>
+              <h2 className="text-xl font-bold text-white font-headline">Welcome to RecoilPay! Finish Account Setup</h2>
               <p className="text-xs text-[#c6c5d9] mt-0.5 max-w-xl">
-                Generate your API Key in Settings, then sign the EIP-712 registration message to pair your wallet address on Linkiswap Core.
+                Generate your API Key in Settings, then sign the EIP-712 registration message to pair your wallet address on RecoilPay.
               </p>
             </div>
           </div>
@@ -263,7 +263,7 @@ export const DashboardPage: React.FC = () => {
               </p>
               <p className="text-xs text-[#8f8fa2] mt-1 max-w-sm">
                 {hasQuotes
-                  ? 'Your active quote liquidity is registered on Linkiswap Core. Intent fills will stream live volume here.'
+                  ? 'Your active quote liquidity is registered on RecoilPay. Intent fills will stream live volume here.'
                   : 'Submit quotes and process cross-chain intents to stream live performance volume here.'}
               </p>
               {!hasQuotes && (
