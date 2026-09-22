@@ -1,8 +1,8 @@
-# LinkiSwap docs
+# RecoilPay docs
 
-End-user documentation for the LinkiSwap V2 product UI. Built with [Docusaurus](https://docusaurus.io/) 3.
+End-user documentation for the RecoilPay V2 product UI. Built with [Docusaurus](https://docusaurus.io/) 3.
 
-The published site is aimed at people using LinkiSwap — how to do their first swap, what sentences the intent bar understands, which chains and tokens are live, how to set up a wallet, and what to do when something goes wrong. Developer-facing docs live in the repo root (`../README.md`, `../docs/`).
+The published site is aimed at people using RecoilPay — how to do their first swap, what sentences the intent bar understands, which chains and tokens are live, how to set up a wallet, and what to do when something goes wrong. Developer-facing docs live in the repo root (`../README.md`, `../docs/`).
 
 ## Run locally
 

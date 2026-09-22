@@ -5,7 +5,7 @@ sidebar_position: 5
 
 # Wallet setup
 
-You need one wallet to use LinkiSwap. It doesn't matter which brand — as long as it supports Ethereum-style chains and can connect to a website, it works.
+You need one wallet to use RecoilPay. It doesn't matter which brand — as long as it supports Ethereum-style chains and can connect to a website, it works.
 
 If you already have a wallet you're happy with, you can skip most of this page. Just make sure it has:
 
@@ -26,7 +26,7 @@ If you already have a wallet you're happy with, you can skip most of this page. 
 - **Trust Wallet**
 - Any WalletConnect-compatible wallet (mobile wallets like Zerion, MetaMask Mobile, etc. connect by QR code)
 
-LinkiSwap uses [RainbowKit](https://www.rainbowkit.com/) under the hood, so anything RainbowKit supports, LinkiSwap supports.
+RecoilPay uses [RainbowKit](https://www.rainbowkit.com/) under the hood, so anything RainbowKit supports, RecoilPay supports.
 
 ---
 
@@ -44,7 +44,7 @@ Even on testnet, get into this habit now — the mainnet version of this mistake
 
 ## 3. Add the testnet networks
 
-Some wallets ship with the testnets already enabled; some don't. If a chain doesn't show up when you connect to LinkiSwap, add it manually. Full RPC details are on [Supported networks](./supported-networks) — or use **[chainlist.org](https://chainlist.org/?testnets=true)** to add them with one click.
+Some wallets ship with the testnets already enabled; some don't. If a chain doesn't show up when you connect to RecoilPay, add it manually. Full RPC details are on [Supported networks](./supported-networks) — or use **[chainlist.org](https://chainlist.org/?testnets=true)** to add them with one click.
 
 The four you'll want:
 
@@ -53,7 +53,7 @@ The four you'll want:
 - Polygon Amoy
 - Ethereum Sepolia
 
-You don't need to switch networks manually — LinkiSwap will prompt you to switch to the source chain when you confirm an intent.
+You don't need to switch networks manually — RecoilPay will prompt you to switch to the source chain when you confirm an intent.
 
 ---
 
@@ -80,9 +80,9 @@ See [Supported networks → Where to get testnet USDC](./supported-networks#wher
 
 ---
 
-## 6. Connect to LinkiSwap
+## 6. Connect to RecoilPay
 
-Go to **[linkiswap.app](https://linkiswap.app)** and click **Connect Wallet** in the top right.
+Go to **[v2.recoilpay.com](https://v2.recoilpay.com)** and click **Connect Wallet** in the top right.
 
 - Pick your wallet from the list.
 - Approve the connection prompt in your wallet (this only grants permission for the site to *see* your address — it can't move funds).
@@ -99,15 +99,15 @@ That's why you can swap across chains without juggling accounts.
 
 ---
 
-## Can LinkiSwap access my funds?
+## Can RecoilPay access my funds?
 
 No.
 
-- LinkiSwap never sees your recovery phrase.
-- LinkiSwap never sees your private key.
+- RecoilPay never sees your recovery phrase.
+- RecoilPay never sees your private key.
 - Every action that moves funds requires an explicit signature in your wallet — you see exactly what you're signing before you approve.
 - You can disconnect the site from your wallet at any time (in most wallets, under **Connected sites** or similar).
 
-The one thing you *do* grant is a **Permit2 approval** the first time you swap a given token on a given chain. That's a standard, revocable permission for LinkiSwap to move the specific token you're swapping. You can revoke it at any time via a tool like [revoke.cash](https://revoke.cash).
+The one thing you *do* grant is a **Permit2 approval** the first time you swap a given token on a given chain. That's a standard, revocable permission for RecoilPay to move the specific token you're swapping. You can revoke it at any time via a tool like [revoke.cash](https://revoke.cash).
 
 **→ [Do your first swap](./quickstart)**

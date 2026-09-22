@@ -34,7 +34,7 @@ Open your wallet and copy your address (a string starting with `0x…`). Then:
 - **Polygon Amoy:** [faucet.polygon.technology](https://faucet.polygon.technology) (choose Amoy + POL)
 - **Ethereum Sepolia:** [cloud.google.com/application/web3/faucet/ethereum/sepolia](https://cloud.google.com/application/web3/faucet/ethereum/sepolia)
 
-**Testnet USDC:** the easiest path is to ask in the LinkiSwap community for a mint — testnet USDC is a special mock token, not the real one. See [Supported networks](./supported-networks) for the exact contract addresses and mint instructions.
+**Testnet USDC:** the easiest path is to ask in the RecoilPay community for a mint — testnet USDC is a special mock token, not the real one. See [Supported networks](./supported-networks) for the exact contract addresses and mint instructions.
 
 If any of this feels unfamiliar, walk through [Wallet setup](./wallet-setup) first, then come back here.
 
@@ -42,7 +42,7 @@ If any of this feels unfamiliar, walk through [Wallet setup](./wallet-setup) fir
 
 ## 3. Open the app
 
-Go to **[linkiswap.app](https://linkiswap.app)** and click **Connect Wallet** in the top right. Approve the connection prompt in your wallet.
+Go to **[v2.recoilpay.com](https://v2.recoilpay.com)** and click **Connect Wallet** in the top right. Approve the connection prompt in your wallet.
 
 You should now see the intent bar in the middle of the page — a big search-style input with an animated placeholder.
 
@@ -76,7 +76,7 @@ Take a moment to read it. If it doesn't match what you meant, click **Cancel** a
 
 Click **Confirm**. Your wallet will pop up **up to two times**:
 
-1. **Approval (first swap on a given chain only).** LinkiSwap asks your wallet's permission to move your input token. This is a one-time step per token, per chain, and uses the [Permit2](https://github.com/Uniswap/permit2) standard. Approve it.
+1. **Approval (first swap on a given chain only).** RecoilPay asks your wallet's permission to move your input token. This is a one-time step per token, per chain, and uses the [Permit2](https://github.com/Uniswap/permit2) standard. Approve it.
 2. **Signature.** You sign a short message describing exactly this swap — no funds move yet, just a signed intent.
 
 Now sit back. The bar shows a live status:
@@ -99,7 +99,7 @@ You didn't:
 - Move funds through an intermediate chain.
 - Manage two wallets.
 
-You just described the outcome. LinkiSwap found an independent **solver** willing to deliver your tokens on the destination chain up front, took your input on the source chain into escrow, and settled the whole thing atomically. The solver pays the destination gas; you only paid gas on the source chain (for the approval + the signature was free).
+You just described the outcome. RecoilPay found an independent **solver** willing to deliver your tokens on the destination chain up front, took your input on the source chain into escrow, and settled the whole thing atomically. The solver pays the destination gas; you only paid gas on the source chain (for the approval + the signature was free).
 
 That's the whole model. Every future swap works exactly the same way.
 

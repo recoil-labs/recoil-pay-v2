@@ -5,7 +5,7 @@ sidebar_position: 4
 
 # Supported networks
 
-LinkiSwap is currently a **testnet demo**. Everything works exactly as it will on mainnet, but the tokens are worthless — you're moving play money. This is intentional: it lets you try the whole flow safely.
+RecoilPay is currently a **testnet demo**. Everything works exactly as it will on mainnet, but the tokens are worthless — you're moving play money. This is intentional: it lets you try the whole flow safely.
 
 Any pair of chains listed below can swap to any other. USDC is the common asset that always works cross-chain.
 
@@ -82,9 +82,9 @@ A single request gives you enough for dozens of swaps.
 
 ## Where to get testnet USDC
 
-The USDC on these chains is not the real Circle USDC — it's a mock ERC-20 with a public `mint` function, deployed for LinkiSwap testing. You can:
+The USDC on these chains is not the real Circle USDC — it's a mock ERC-20 with a public `mint` function, deployed for RecoilPay testing. You can:
 
-1. **Ask in the LinkiSwap community.** The team can mint you a batch.
+1. **Ask in the RecoilPay community.** The team can mint you a batch.
 2. **Mint your own** if you're comfortable with a block explorer. Every USDC contract listed below has a `mint(address, uint256)` function you can call from Etherscan-style explorers. Six decimals: `1 USDC = 1_000_000` in the raw amount.
 
 ### USDC contract addresses

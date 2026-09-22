@@ -7,7 +7,7 @@ sidebar_position: 6
 
 ## Fees on testnet
 
-Right now LinkiSwap runs on public testnets, so **you pay nothing real**. But it's useful to understand what you're paying (in test currency) because the same shape applies on mainnet.
+Right now RecoilPay runs on public testnets, so **you pay nothing real**. But it's useful to understand what you're paying (in test currency) because the same shape applies on mainnet.
 
 For a single swap you pay gas on the **source chain only** — the chain your input token is on. That covers:
 
@@ -22,7 +22,7 @@ For a send, the same rules apply.
 
 ## What the solver earns
 
-Solvers are independent operators competing for your business. On mainnet, each quote includes a spread and a fee — the difference between what you pay and what you receive. LinkiSwap fetches quotes from every available solver in parallel and shows you the best one.
+Solvers are independent operators competing for your business. On mainnet, each quote includes a spread and a fee — the difference between what you pay and what you receive. RecoilPay fetches quotes from every available solver in parallel and shows you the best one.
 
 On testnet, spreads are effectively zero. The confirm card will show you the exact receive amount before you sign, so you always know what you're getting.
 
@@ -56,7 +56,7 @@ Traditional cross-chain moves work like this:
 
 Each of those steps has its own delay, and some bridges wait for finality (10+ minutes on some chains).
 
-LinkiSwap's model is different. A solver has liquidity on **both** chains already. When you sign your intent:
+RecoilPay's model is different. A solver has liquidity on **both** chains already. When you sign your intent:
 
 - The solver immediately sends your tokens on the destination chain (from its own inventory).
 - The solver then claims your input from the source chain, at its own pace.

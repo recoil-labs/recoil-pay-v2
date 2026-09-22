@@ -5,7 +5,7 @@ sidebar_position: 3
 
 # Writing intents
 
-An **intent** is one sentence describing what you want LinkiSwap to do. This page shows every phrasing that works today and, just as usefully, the ones that don't.
+An **intent** is one sentence describing what you want RecoilPay to do. This page shows every phrasing that works today and, just as usefully, the ones that don't.
 
 You don't need to memorise anything. If a sentence isn't understood, the app tells you what's missing.
 
@@ -13,7 +13,7 @@ You don't need to memorise anything. If a sentence isn't understood, the app tel
 
 ## The two things you can ask for
 
-LinkiSwap does two things today: **swap** and **send**.
+RecoilPay does two things today: **swap** and **send**.
 
 ### Swap — trade one token for another, across chains
 
@@ -56,7 +56,7 @@ Recipients must be a full `0x…` address. **ENS names are not supported yet** �
 
 ## Chaining intents
 
-You can ask for multiple things in one sentence, separated by **and then**. LinkiSwap runs them one after another and shows you a progress bar for the queue.
+You can ask for multiple things in one sentence, separated by **and then**. RecoilPay runs them one after another and shows you a progress bar for the queue.
 
 **Example:**
 
@@ -70,15 +70,15 @@ The app confirms and executes intent 1, then automatically moves on to intent 2.
 
 ---
 
-## What LinkiSwap understands
+## What RecoilPay understands
 
-You don't have to write chain and token names any single "right" way. LinkiSwap normalises common variations.
+You don't have to write chain and token names any single "right" way. RecoilPay normalises common variations.
 
 ### Chains
 
 The following all mean the same chain:
 
-| You type | LinkiSwap hears |
+| You type | RecoilPay hears |
 |---|---|
 | `op sepolia`, `optimism sepolia` | Optimism Sepolia |
 | `base sepolia` | Base Sepolia |
@@ -89,7 +89,7 @@ Case doesn't matter (`OP Sepolia` and `op sepolia` are the same).
 
 ### Tokens
 
-| You type | LinkiSwap hears |
+| You type | RecoilPay hears |
 |---|---|
 | `usdc` | USDC |
 | `usdt`, `tether` | USDT |
@@ -107,7 +107,7 @@ See [Supported networks](./supported-networks) for which token is available on w
 
 ## When something doesn't fit
 
-LinkiSwap gives you three distinct kinds of feedback so you know exactly what to fix.
+RecoilPay gives you three distinct kinds of feedback so you know exactly what to fix.
 
 ### 1. It didn't understand the shape of your sentence
 
@@ -135,7 +135,7 @@ You'll see a bullet list:
 
 > - Amount is not stated.
 
-LinkiSwap collects **every** missing piece in one go, so you can fix them all in one edit.
+RecoilPay collects **every** missing piece in one go, so you can fix them all in one edit.
 
 ### 3. It understood you, but that route isn't live yet
 
@@ -150,7 +150,7 @@ You'll see:
 > - Arbitrum isn't supported yet.
 > - Base isn't supported yet.
 
-Fix: use one of the [Supported networks](./supported-networks). LinkiSwap will expand over time.
+Fix: use one of the [Supported networks](./supported-networks). RecoilPay will expand over time.
 
 ---
 
@@ -169,9 +169,9 @@ Fix: use one of the [Supported networks](./supported-networks). LinkiSwap will e
 
 ---
 
-## A note on how LinkiSwap reads your sentence
+## A note on how RecoilPay reads your sentence
 
-LinkiSwap uses a language model to turn your words into a structured intent. That model **only proposes** — it never touches your money. Everything downstream (chain lookup, token lookup, amount parsing, address checksumming, signature) is deterministic code that you can audit. And you always see a plain-English confirm card before anything is signed.
+RecoilPay uses a language model to turn your words into a structured intent. That model **only proposes** — it never touches your money. Everything downstream (chain lookup, token lookup, amount parsing, address checksumming, signature) is deterministic code that you can audit. And you always see a plain-English confirm card before anything is signed.
 
 If the model ever misreads your intent, the confirm card will make it obvious — cancel and rephrase.
 

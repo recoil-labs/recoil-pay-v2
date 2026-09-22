@@ -3,16 +3,16 @@ import type * as Preset from '@docusaurus/preset-classic';
 import { themes as prismThemes } from 'prism-react-renderer';
 
 const config: Config = {
-  title: 'LinkiSwap Docs',
+  title: 'RecoilPay Docs',
   tagline: 'Cross-chain swaps in plain English.',
   favicon: 'img/favicon.svg',
 
   // Set to the public URL once you have one; safe defaults for local + Render preview.
-  url: 'https://docs.linkiswap.app',
+  url: 'https://docs.recoilpay.com',
   baseUrl: '/',
 
-  organizationName: 'linkiswap',
-  projectName: 'linkiswap-docs',
+  organizationName: 'recoilpay',
+  projectName: 'recoilpay-docs',
 
   onBrokenLinks: 'warn',
   markdown: {
@@ -34,7 +34,7 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           routeBasePath: '/',
           editUrl:
-            'https://github.com/linkiswap/linkiswap-core/edit/main/docs-site/',
+            'https://github.com/recoil-labs/recoil-pay-v2/edit/main/linkiswap-core/docs-site/',
         },
         blog: false,
         theme: {
@@ -51,9 +51,9 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'LinkiSwap',
+      title: 'RecoilPay',
       logo: {
-        alt: 'LinkiSwap',
+        alt: 'RecoilPay',
         src: 'img/logo.svg',
       },
       items: [
@@ -64,7 +64,7 @@ const config: Config = {
           label: 'User Guide',
         },
         {
-          href: 'https://linkiswap.app',
+          href: 'https://v2.recoilpay.com',
           label: 'Open the app',
           position: 'right',
         },
@@ -76,7 +76,7 @@ const config: Config = {
         {
           title: 'Product',
           items: [
-            { label: 'Open the app', href: 'https://linkiswap.app' },
+            { label: 'Open the app', href: 'https://v2.recoilpay.com' },
             { label: 'Quickstart', to: '/quickstart' },
             { label: 'Writing intents', to: '/writing-intents' },
           ],
@@ -90,7 +90,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} LinkiSwap. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} RecoilPay. Built with Docusaurus.`,
     },
     prism: {
       theme: prismThemes.github,

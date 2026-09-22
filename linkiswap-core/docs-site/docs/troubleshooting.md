@@ -5,7 +5,7 @@ sidebar_position: 8
 
 # Troubleshooting
 
-If something isn't working, find the closest match below. If none of these help, open an issue on the [linkiswap-core repository](https://github.com/linkiswap/linkiswap-core/issues).
+If something isn't working, find the closest match below. If none of these help, open an issue on the [recoil-pay-v2 repository](https://github.com/recoil-labs/recoil-pay-v2/issues).
 
 ---
 
@@ -17,7 +17,7 @@ If something isn't working, find the closest match below. If none of these help,
 
 - Refresh the page.
 - Wait a minute and try again — Hugging Face's free inference API occasionally throttles.
-- If it persists, the issue is on our side. Check the [linkiswap-core issues page](https://github.com/linkiswap/linkiswap-core/issues) or reach out.
+- If it persists, the issue is on our side. Check the [recoil-pay-v2 issues page](https://github.com/recoil-labs/recoil-pay-v2/issues) or reach out.
 
 ---
 
@@ -35,7 +35,7 @@ If something isn't working, find the closest match below. If none of these help,
 
 ## "Chain 'X' isn't supported yet"
 
-**What it means:** LinkiSwap understood which chain you asked for, but it isn't in the live route set.
+**What it means:** RecoilPay understood which chain you asked for, but it isn't in the live route set.
 
 **Fix:** use one of the [Supported networks](./supported-networks).
 
@@ -43,9 +43,9 @@ If something isn't working, find the closest match below. If none of these help,
 
 ## "Token 'X' isn't recognized"
 
-**What it means:** you typed a symbol LinkiSwap doesn't know.
+**What it means:** you typed a symbol RecoilPay doesn't know.
 
-**Fix:** check the spelling. If you meant USDC, USDT, or ETH, use those exact names. See [Writing intents → What LinkiSwap understands](./writing-intents#what-linkiswap-understands).
+**Fix:** check the spelling. If you meant USDC, USDT, or ETH, use those exact names. See [Writing intents → What RecoilPay understands](./writing-intents#what-recoilpay-understands).
 
 ---
 
@@ -83,14 +83,14 @@ If something isn't working, find the closest match below. If none of these help,
 
 1. Make sure your wallet extension is unlocked.
 2. Refresh the page.
-3. Disconnect any existing session in your wallet (**Connected sites** → find linkiswap.app → disconnect), then reconnect.
+3. Disconnect any existing session in your wallet (**Connected sites** → find v2.recoilpay.com → disconnect), then reconnect.
 4. Try a different browser or a different wallet (see [Wallet setup](./wallet-setup) for supported options).
 
 ---
 
 ## The app wants me to switch networks
 
-That's normal. LinkiSwap needs your wallet to be on the **source chain** (the chain the input token lives on) before you can sign.
+That's normal. RecoilPay needs your wallet to be on the **source chain** (the chain the input token lives on) before you can sign.
 
 Approve the switch prompt. If your wallet doesn't have the destination chain, add it — see [Supported networks → How to add a chain to your wallet](./supported-networks#how-to-add-a-chain-to-your-wallet).
 
@@ -102,7 +102,7 @@ Testnet chains can occasionally be slow. **Don't refresh** — the transaction i
 
 - Open your wallet and check the transaction status.
 - Some wallets let you **speed up** the transaction by paying more gas. On testnet this is fine.
-- If the transaction shows as **dropped** or **failed** in your wallet, close the confirm card in LinkiSwap and try again.
+- If the transaction shows as **dropped** or **failed** in your wallet, close the confirm card in RecoilPay and try again.
 
 ---
 
@@ -127,7 +127,7 @@ Click **Dismiss** and try again. If it fails a second time, try:
 - A different chain pair.
 - Wait a few minutes.
 
-If it keeps failing, [open an issue](https://github.com/linkiswap/linkiswap-core/issues) with the sentence you typed and (if you have it) the order id from the status card.
+If it keeps failing, [open an issue](https://github.com/recoil-labs/recoil-pay-v2/issues) with the sentence you typed and (if you have it) the order id from the status card.
 
 ---
 
@@ -147,7 +147,7 @@ The wallet should now show your balance.
 
 Look at the top-right of your browser — most wallet extensions surface a small notification badge when they're waiting for you.
 
-Click your wallet icon. If there's a queued request, approve or reject it. LinkiSwap can't proceed until that queue is clear.
+Click your wallet icon. If there's a queued request, approve or reject it. RecoilPay can't proceed until that queue is clear.
 
 ---
 
@@ -157,6 +157,6 @@ If none of these describe what you're seeing:
 
 - Take a screenshot including any error text.
 - Note the sentence you typed and the chains involved.
-- [Open an issue](https://github.com/linkiswap/linkiswap-core/issues) with those details.
+- [Open an issue](https://github.com/recoil-labs/recoil-pay-v2/issues) with those details.
 
 We fix reported issues fast — you're helping the whole community when you report one.
