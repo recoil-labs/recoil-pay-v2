@@ -824,15 +824,22 @@ impl Broadcaster for AggregatorBroadcaster {
 		path: &str,
 		builder: reqwest::RequestBuilder,
 	) -> FillWorkerResult<reqwest::RequestBuilder> {
-		// For `/sign-fill`, the auth middleware recovers the
-		// `x-solver-id` header and uses it to look up the operator's
-		// encrypted fill-wallet key. The signing identity we use here
-		// is whatever worker identity is currently bound to this
-		// broadcaster. The middleware doesn't enforce that the worker's
-		// address and the operator's address match — only that the
-		// worker signature recovers to a valid lower-case hex address.
-		// This is intentional: a multi-tenant fill-worker can request
-		// fills for any operator it serves.
+		// The `x-auth-*` envelope below identifies *which* worker is
+		// asking, but the aggregator's auth middleware does not accept it
+		// as a credential — it only understands the public prefixes, the
+		// first-party `x-worker-token`, a bearer JWT and `x-api-key`. Sent
+		// alone, a `/sign-fill` request is therefore rejected as
+		// unauthenticated and every settlement fails with a 401.
+		//
+		// So attach the worker token here exactly as `signed()` does for
+		// claim/heartbeat/status. That is the credential the aggregator
+		// recognises, and `ensure_operator_scope` deliberately lets it act
+		// for any operator — which is what a multi-tenant worker needs.
+		let builder = match self.worker_token.as_deref() {
+			Some(token) => builder.header("x-worker-token", token),
+			None => builder,
+		};
+
 		let signer_opt = self.signer.read().unwrap().clone();
 		let signer = signer_opt.as_ref().ok_or_else(|| {
 			FillWorkerError::Config(

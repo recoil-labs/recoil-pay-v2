@@ -7,6 +7,29 @@ use oif_types::storage::OperatorStorageTrait;
 use oif_types::storage::VaultStorageTrait;
 use oif_types::storage::WorkerStorageTrait;
 use oif_types::VaultBalance;
+
+/// Postgres `jsonb` cannot hold a NUL byte: writing one fails the whole
+/// statement with "unsupported Unicode escape sequence". EVM revert reasons
+/// arrive as raw bytes and regularly contain them, so a failed settlement
+/// would poison the very write that records the failure — the order stayed
+/// in `settling` forever and the UI showed it as stuck.
+///
+/// Scrub NULs from every string (and key) on the way to the database. They
+/// carry no information here; the alternative is losing the whole update.
+fn scrub_nul(value: serde_json::Value) -> serde_json::Value {
+	use serde_json::Value;
+	match value {
+		Value::String(s) => Value::String(s.replace('\u{0}', "")),
+		Value::Array(items) => Value::Array(items.into_iter().map(scrub_nul).collect()),
+		Value::Object(fields) => Value::Object(
+			fields
+				.into_iter()
+				.map(|(k, v)| (k.replace('\u{0}', ""), scrub_nul(v)))
+				.collect(),
+		),
+		other => other,
+	}
+}
 use oif_types::{
 	CircuitBreakerState, MetricsTimeSeries, Operator, Order, OrderStatus, RollingMetrics, Solver,
 	SolverQuote,
@@ -47,7 +70,7 @@ impl PostgresStore {
 #[async_trait]
 impl Repository<Order> for PostgresStore {
 	async fn create(&self, entity: Order) -> StorageResult<Order> {
-		let data = serde_json::to_value(&entity).map_err(|e| StorageError::Operation { message: e.to_string() })?;
+		let data = scrub_nul(serde_json::to_value(&entity).map_err(|e| StorageError::Operation { message: e.to_string() })?);
 		let status = serde_json::to_string(&entity.status()).unwrap_or_default().trim_matches('"').to_string();
 
 		sqlx::query(
@@ -83,7 +106,7 @@ impl Repository<Order> for PostgresStore {
 	}
 
 	async fn update(&self, entity: Order) -> StorageResult<Order> {
-		let data = serde_json::to_value(&entity).map_err(|e| StorageError::Operation { message: e.to_string() })?;
+		let data = scrub_nul(serde_json::to_value(&entity).map_err(|e| StorageError::Operation { message: e.to_string() })?);
 		let status = serde_json::to_string(&entity.status()).unwrap_or_default().trim_matches('"').to_string();
 
 		let result = sqlx::query(
@@ -296,7 +319,7 @@ impl OrderStorage for PostgresStore {
 #[async_trait]
 impl Repository<Solver> for PostgresStore {
 	async fn create(&self, entity: Solver) -> StorageResult<Solver> {
-		let data = serde_json::to_value(&entity).map_err(|e| StorageError::Operation { message: e.to_string() })?;
+		let data = scrub_nul(serde_json::to_value(&entity).map_err(|e| StorageError::Operation { message: e.to_string() })?);
 
 		sqlx::query(
 			"INSERT INTO solvers (id, is_active, data) VALUES ($1, $2, $3)
@@ -331,7 +354,7 @@ impl Repository<Solver> for PostgresStore {
 	}
 
 	async fn update(&self, entity: Solver) -> StorageResult<Solver> {
-		let data = serde_json::to_value(&entity).map_err(|e| StorageError::Operation { message: e.to_string() })?;
+		let data = scrub_nul(serde_json::to_value(&entity).map_err(|e| StorageError::Operation { message: e.to_string() })?);
 
 		let result = sqlx::query("UPDATE solvers SET is_active = $1, data = $2, updated_at = NOW() WHERE id = $3")
 			.bind(entity.status == oif_types::SolverStatus::Active)
