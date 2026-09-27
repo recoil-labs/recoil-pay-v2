@@ -64,6 +64,12 @@ const config: Config = {
           label: 'User Guide',
         },
         {
+          type: 'docSidebar',
+          sidebarId: 'developers',
+          position: 'left',
+          label: 'Developers',
+        },
+        {
           href: 'https://v2.recoilpay.com',
           label: 'Open the app',
           position: 'right',
@@ -79,6 +85,15 @@ const config: Config = {
             { label: 'Open the app', href: 'https://v2.recoilpay.com' },
             { label: 'Quickstart', to: '/quickstart' },
             { label: 'Writing intents', to: '/writing-intents' },
+          ],
+        },
+        {
+          title: 'Developers',
+          items: [
+            { label: 'Integrate RecoilPay', to: '/integrate/' },
+            { label: 'Forward your first intent', to: '/integrate/quickstart' },
+            { label: 'API reference', to: '/integrate/api-reference' },
+            { label: 'Run a solver', href: 'https://solver.recoilpay.com' },
           ],
         },
         {

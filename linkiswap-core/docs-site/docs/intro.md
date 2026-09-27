@@ -38,6 +38,9 @@ We wrote these for anyone using the RecoilPay app — no crypto background requi
 | Understand fees and how long it takes | [Fees and timing](./fees-and-timing) |
 | Answer a specific question | [FAQ](./faq) |
 | Fix something that isn't working | [Troubleshooting](./troubleshooting) |
+| **Build on RecoilPay** | [Integrate RecoilPay](./integrate/) |
+
+Building rather than swapping? The **[Developers](./integrate/)** section documents the API for forwarding intents to RecoilPay from your own app, wallet, or checkout.
 
 ---
 
