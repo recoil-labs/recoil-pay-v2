@@ -5,7 +5,7 @@ sidebar_position: 5
 
 # API reference
 
-The public integration surface. Five routes, no authentication, JSON in and out with camelCase keys.
+The public integration surface. Five routes, no authentication, JSON in and out. Keys are camelCase everywhere except [`/api/v1/chains`](#get-apiv1chains), which is snake_case.
 
 ```bash
 export RECOIL_API=https://recoil-aggregator-675174162902.us-central1.run.app
@@ -24,7 +24,31 @@ export RECOIL_API=https://recoil-aggregator-675174162902.us-central1.run.app
 
 Amounts are always **base-unit decimal strings**; addresses are always [ERC-7930 interop addresses](./intents#addresses-are-erc-7930-encoded).
 
-An interactive Swagger UI is served at `/swagger-ui` with the raw spec at `/api-docs/openapi.json` on deployments built with the `openapi` feature.
+## Try it interactively
+
+The aggregator serves its own OpenAPI spec and an interactive Swagger UI:
+
+| What | Where | Use it for |
+|---|---|---|
+| **Swagger UI** | [`/swagger-ui`](https://recoil-aggregator-675174162902.us-central1.run.app/swagger-ui) | Exploring and calling the API from your browser |
+| **Raw spec** | [`/api-docs/openapi.json`](https://recoil-aggregator-675174162902.us-central1.run.app/api-docs/openapi.json) | OpenAPI 3.1 JSON — feed it to codegen |
+
+The spec is generated from the server's own types, so it can't drift from what the API accepts. Point your codegen at it and skip writing types by hand:
+
+```bash
+# TypeScript types straight from the live spec
+npx openapi-typescript "$RECOIL_API/api-docs/openapi.json" -o src/recoilpay.d.ts
+```
+
+The spec declares no `servers` block by design, so Swagger UI issues requests against whatever origin served the page — and your generated client takes the base URL from your own configuration rather than baking in a hostname that [will change](./going-live#the-api-hostname).
+
+:::note "Try it out" covers four routes of five
+`/chains`, `/solvers`, `/quotes`, and `/orders/{id}` are fully explorable from the browser — `/quotes` in particular is pre-filled with a working intent, so you can see real solver competition in one click.
+
+`POST /api/v1/orders` is the exception: it needs an EIP-712 signature from a wallet, which a docs page can't produce. Use Swagger UI to get a quote, then sign and submit from your own client — see [Signing](./signing).
+:::
+
+Only the public integration surface is documented. `/solver-api/*` is deliberately absent from the spec.
 
 ---
 
@@ -36,20 +60,24 @@ Chain registry: settlement contracts, Permit2 address, RPC endpoint, and tokens 
 {
   "data": [
     {
-      "chainId": 84532,
+      "chain_id": 84532,
       "name": "base-sepolia",
-      "rpcUrl": "https://base-sepolia-rpc.publicnode.com",
-      "inputSettler": "0x…",
-      "outputSettler": "0x…",
+      "rpc_url": "https://base-sepolia-rpc.publicnode.com",
+      "input_settler": "0x…",
+      "output_settler": "0x…",
       "oracle": "0x…",
       "permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-      "tokens": [{ "address": "0x73c8…9705", "symbol": "USDC", "decimals": 6 }]
+      "tokens": [{ "symbol": "USDC", "address": "0x73c8…9705", "decimals": 6 }]
     }
   ]
 }
 ```
 
-All public on-chain configuration. Sorted by `chainId`.
+All public on-chain configuration. Sorted by `chain_id`.
+
+:::caution This endpoint is snake_case
+`/api/v1/chains` is the one exception to the camelCase convention — its keys are `chain_id`, `rpc_url`, `input_settler`, `output_settler`. Every other endpoint on this page uses camelCase. Don't share a key-casing transform across them.
+:::
 
 ---
 

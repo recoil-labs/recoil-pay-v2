@@ -41,7 +41,11 @@ COPY --from=planner /app/recipe.json recipe.json
 # it the binary silently falls back to `MemoryStore` even when
 # `DATABASE_URL` is set, which means operator/quote rows live in RAM and
 # vanish on every redeploy.
-RUN cargo chef cook --release --features postgres --recipe-path recipe.json
+#
+# `openapi` serves the partner-facing spec at /api-docs/openapi.json and
+# Swagger UI at /swagger-ui. Without it those routes simply do not exist
+# (404), so developers have nothing to test against.
+RUN cargo chef cook --release --features postgres,openapi --recipe-path recipe.json
 
 # Copy source code and build the application
 COPY Cargo.toml Cargo.lock ./
@@ -52,7 +56,7 @@ COPY src/ ./src/
 # Build the aggregator in release mode with cache mounts. Same feature
 # flag as the cook step above so the two binaries are linked against the
 # same set of crates.
-RUN cargo build --release --features postgres && \
+RUN cargo build --release --features postgres,openapi && \
     cp /app/target/release/oif-aggregator /usr/local/bin/oif-aggregator
 
 # Build the fill-worker (multi-tenant operator binary). Render deploys

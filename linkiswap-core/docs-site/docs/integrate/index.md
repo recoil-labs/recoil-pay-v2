@@ -79,6 +79,8 @@ Confirm you can reach it:
 curl -s "$RECOIL_API/health"
 ```
 
+Prefer to click rather than curl? The same API is browsable, with a working pre-filled request, at **[`/swagger-ui`](https://recoil-aggregator-675174162902.us-central1.run.app/swagger-ui)** — see [Try it interactively](./api-reference#try-it-interactively).
+
 :::caution The hostname is not stable yet
 That's a Cloud Run URL, and it will move to a permanent `api.recoilpay.com`-style hostname before mainnet. **Make it configurable** — read it from an environment variable rather than hardcoding it, exactly as the reference client does. [Tell us you're building on it](./going-live#talk-to-us) and we'll give you notice before it changes.
 :::
@@ -104,7 +106,7 @@ Partner API keys are on the roadmap, and they're what will carry attribution and
 | See the whole loop working, today | [Forward your first intent](./quickstart) |
 | Understand the intent JSON and address encoding | [The intent object](./intents) |
 | Get the signature right | [Signing and submitting](./signing) |
-| Look up a field or a status value | [API reference](./api-reference) |
+| Look up a field, or poke the API in a browser | [API reference](./api-reference) |
 | Understand what's testnet-only, and talk to a human | [Going to production](./going-live) |
 
 **→ [Forward your first intent](./quickstart)**

@@ -24,12 +24,22 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
 
 /// Canonical Permit2 address — identical on every EVM chain.
 pub const PERMIT2_ADDRESS: &str = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 
 /// A tradable token on a specific chain.
+///
+/// NOTE: unlike the rest of the API, these types carry no
+/// `rename_all = "camelCase"`, so `/api/v1/chains` serialises
+/// `chain_id` / `rpc_url` / `input_settler` in snake_case. That is
+/// load-bearing for existing consumers (the operator dashboard reads
+/// these keys), so the OpenAPI schema documents it as-is rather than
+/// quietly "fixing" the casing and breaking them.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct TokenInfo {
 	pub symbol: String,
 	/// 0x-prefixed EVM address.
@@ -39,6 +49,7 @@ pub struct TokenInfo {
 
 /// Everything the aggregator knows about one chain.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct ChainInfo {
 	pub chain_id: u64,
 	/// Human-readable name (matches the OIF solver config naming).

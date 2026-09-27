@@ -41,7 +41,9 @@ What keys will bring you: attribution, volume reporting, higher limits, and a su
 
 ### Rate limits
 
-There are no documented limits on the public endpoints today. There will be. Be a good citizen in the meantime:
+Rate limiting is currently **disabled** on the deployment, but it isn't hypothetical — the aggregator has a global limiter built in, defaulting to **1000 requests/minute** across all callers, and switching it on is a config change rather than a release. Assume it will be enabled, and note that a global limit means a noisy integration degrades service for everyone, including your own users.
+
+Be a good citizen now and you'll never notice the switch:
 
 - Poll order status every 2–3 seconds, not in a tight loop.
 - Don't re-request quotes on every keystroke. Debounce.

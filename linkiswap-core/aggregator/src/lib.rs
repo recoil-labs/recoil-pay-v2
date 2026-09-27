@@ -721,6 +721,7 @@ where
 		info!("  GET  /api/v1/orders/{{id}}");
 		info!("  GET  /api/v1/solvers");
 		info!("  GET  /api/v1/solvers/{{id}}");
+		info!("  GET  /api/v1/chains");
 		if cfg!(feature = "openapi") {
 			info!("  GET  /swagger-ui");
 			info!("  GET  /api-docs/openapi.json");

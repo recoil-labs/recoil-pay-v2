@@ -18,7 +18,12 @@ tower = "0.5"
 tracing = "0.1"
 utoipa = { version = "5.0", optional = true }
 utoipa-axum = { version = "0.2", optional = true }
-utoipa-swagger-ui = { version = "9", optional = true, features = ["axum"] }
+# `vendored` embeds the Swagger UI dist in the crate. Without it, this
+# crate's build script shells out to the `curl` binary to fetch
+# swagger-ui v5.17.14 from GitHub at compile time — which fails in the
+# Chainguard builder image (no curl installed) and makes every release
+# build depend on GitHub being reachable.
+utoipa-swagger-ui = { version = "9", optional = true, features = ["axum", "vendored"] }
 thiserror = "2.0"
 chrono = { version = "0.4", features = ["serde"] }
 dashmap = "6.0"
@@ -47,4 +52,4 @@ alloy-signer = "1.0"
 alloy-signer-local = "1.0"
 
 [features]
-openapi = ["utoipa", "utoipa-axum", "utoipa-swagger-ui", "oif-types/openapi", "oif-service/openapi"]
+openapi = ["utoipa", "utoipa-axum", "utoipa-swagger-ui", "oif-types/openapi", "oif-service/openapi", "oif-config/openapi"]

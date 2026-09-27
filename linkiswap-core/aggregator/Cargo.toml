@@ -43,5 +43,5 @@ mockall = "0.13"
 
 [features]
 default = []
-openapi = ["oif-api/openapi", "oif-types/openapi"]
+openapi = ["oif-api/openapi", "oif-types/openapi", "oif-config/openapi"]
 postgres = ["oif-storage/postgres"]
