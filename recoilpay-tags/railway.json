@@ -1,0 +1,10 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "buildCommand": "npm ci && npm run build -w web"
+  },
+  "deploy": {
+    "startCommand": "npm start -w api",
+    "healthcheckPath": "/api/health"
+  }
+}
