@@ -37,3 +37,80 @@
 .markdown > h1 {
   --ifm-h1-font-size: 2.4rem;
 }
+
+/**
+ * Navbar CTAs — "Interactive API Reference" (Swagger UI) and "Open the app".
+ * A matched pair with deliberate hierarchy: the app is the primary action and
+ * is filled; the API reference is outlined so the two read as a set rather
+ * than competing for the same emphasis.
+ *
+ * Colours come from --ifm-color-primary, which already flips per theme
+ * (indigo in light, cyan in dark), so no separate dark-mode rules are needed.
+ * --ifm-background-color supplies the filled button's text colour and flips
+ * the same way, staying legible against the accent in both themes.
+ *
+ * Selectors are compounded with .navbar__link to outrank Infima's own
+ * .navbar__link:hover, which would otherwise reset the text colour.
+ */
+.navbar__link.navbar-api-cta,
+.navbar__link.navbar-app-cta {
+  border: 1px solid var(--ifm-color-primary);
+  border-radius: 999px;
+  /* Replaces Infima's navbar item padding, which was also doing the work of
+     separating adjacent items — hence the explicit margin. */
+  padding: 0.3rem 0.9rem;
+  margin-left: 0.5rem;
+  font-weight: 600;
+  line-height: 1.4;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+/* Secondary: outlined, fills on interaction. */
+.navbar__link.navbar-api-cta {
+  color: var(--ifm-color-primary);
+}
+
+.navbar__link.navbar-api-cta:hover,
+.navbar__link.navbar-api-cta:focus-visible {
+  background-color: var(--ifm-color-primary);
+  color: var(--ifm-background-color);
+  text-decoration: none;
+}
+
+/* Primary: filled, deepens on interaction.
+ *
+ * Hover uses --darkest, not --darker. The intermediate shades are too close
+ * to the resting fill to register: against the base, --dark measures a
+ * 1.20 contrast ratio in light and 1.11 in dark (1.0 being indistinguishable),
+ * which reads as no feedback at all. --darkest lands at 1.74 / 1.60 while
+ * keeping text contrast at 10.3 / 8.4, comfortably past AA. */
+.navbar__link.navbar-app-cta {
+  background-color: var(--ifm-color-primary);
+  color: var(--ifm-background-color);
+}
+
+.navbar__link.navbar-app-cta:hover,
+.navbar__link.navbar-app-cta:focus-visible {
+  background-color: var(--ifm-color-primary-darkest);
+  border-color: var(--ifm-color-primary-darkest);
+  color: var(--ifm-background-color);
+  text-decoration: none;
+}
+
+/* The mobile sidebar renders navbar items as a plain stacked menu; pill
+   buttons in that list read as stray controls, so drop the chrome there. */
+.navbar-sidebar .navbar-api-cta,
+.navbar-sidebar .navbar-api-cta:hover,
+.navbar-sidebar .navbar-app-cta,
+.navbar-sidebar .navbar-app-cta:hover {
+  border: 0;
+  padding: var(--ifm-menu-link-padding-vertical) var(--ifm-menu-link-padding-horizontal);
+  margin-left: 0;
+  border-radius: var(--ifm-global-radius);
+  background-color: transparent;
+  color: inherit;
+  font-weight: inherit;
+}

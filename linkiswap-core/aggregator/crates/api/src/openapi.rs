@@ -1,3 +1,20 @@
+//! OpenAPI document for the public integration surface.
+//!
+//! Served as Swagger UI at `/swagger-ui` and as raw JSON at
+//! `/api-docs/openapi.json`, both behind the `openapi` cargo feature and
+//! both allowlisted in `auth::middleware` so they are reachable
+//! anonymously (see the public-path list there).
+//!
+//! Scope: this documents the **partner integration surface** — the routes
+//! a developer forwarding intents to RecoilPay needs. It deliberately
+//! omits `/solver-api/*`, which is authenticated operator tooling with a
+//! different audience and its own docs.
+//!
+//! No `servers` block is declared on purpose. Swagger UI then resolves
+//! requests relative to whatever origin served the page, so "Try it out"
+//! works on localhost, on a preview deploy, and in production without a
+//! hardcoded hostname that would go stale the moment the service moves.
+
 use utoipa::OpenApi;
 
 use oif_service::SolverStats;
@@ -8,40 +25,66 @@ use oif_types::quotes::request::QuoteRequest;
 use oif_types::quotes::response::QuotesResponse;
 use oif_types::solvers::response::{SolverResponse, SolversResponse};
 
+use crate::handlers::chains::ChainsResponse;
+
 #[derive(OpenApi)]
 #[openapi(
     paths(
         crate::handlers::health::health,
+        crate::handlers::chains::get_chains,
+        crate::handlers::solvers::get_solvers,
+        crate::handlers::solvers::get_solver_by_id,
         crate::handlers::quotes::post_quotes,
         crate::handlers::orders::post_orders,
         crate::handlers::orders::get_order,
-        crate::handlers::solvers::get_solvers,
-        crate::handlers::solvers::get_solver_by_id,
     ),
     components(schemas(
         QuoteRequest, QuotesResponse,
         OrderRequest, OrderResponse,
         SolverResponse, SolversResponse,
+        ChainsResponse,
         HealthResponse, StorageHealthInfo, SolverStats
     )),
     tags(
-        (name = "quotes", description = "Request and manage price quotes from multiple solvers for cross-chain transactions"),
-        (name = "orders", description = "Submit, track, and manage cross-chain orders through the aggregator"),
-        (name = "health", description = "System health checks and diagnostics for monitoring service status"),
-        (name = "solvers", description = "Discover and interact with available solvers and their capabilities")
+        (name = "quotes", description = "Price an intent against every eligible solver in parallel."),
+        (name = "orders", description = "Submit a signed order and track it to settlement."),
+        (name = "chains", description = "Supported chains, settlement contracts, and token metadata."),
+        (name = "solvers", description = "Registered solvers and the assets each can fill."),
+        (name = "health", description = "Liveness and storage diagnostics.")
     ),
     info(
-        title = "OIF Aggregator API",
+        title = "RecoilPay Aggregator API",
         version = "0.1.0",
-        description = "Open Intents Framework (OIF) Aggregator provides a unified API for cross-chain transaction aggregation. This service connects to multiple solvers to find the best execution paths for user intents across different blockchain networks.",
-        license(
-            name = "MIT",
-            url = "https://github.com/openintentsframework/oif-aggregator/blob/main/LICENSE"
-        ),
+        description = "\
+The public API for forwarding intents to RecoilPay. Four calls make a \
+complete integration:
+
+1. `POST /api/v1/quotes` — price the intent; each quote carries ready-to-sign \
+   EIP-712 typed data in `order.payload`.
+2. Your user signs that payload with their wallet and you prefix the \
+   signature with a scheme byte (`0x00` for `oif-escrow-v0`).
+3. `POST /api/v1/orders` — submit the quote **verbatim** plus the signature. \
+   The quote's `integrityChecksum` is re-verified here, so any mutation is \
+   rejected.
+4. `GET /api/v1/orders/{id}` — poll. `executed` means the funds have landed.
+
+**Testnet only.** Optimism Sepolia, Base Sepolia, Polygon Amoy, and Ethereum \
+Sepolia. The tokens are mock ERC-20s with no real value.
+
+**No authentication.** Users authorise with an on-chain signature over the \
+order itself rather than an account here, so these routes are anonymous by \
+design.
+
+**Try it out works for everything except `POST /api/v1/orders`**, which needs \
+a wallet signature this page cannot produce. Use it to explore quotes, \
+solvers, chains, and order status; sign in your own client.
+
+Narrative guides, a reference ERC-7930 address encoder, and the signing \
+walkthrough: https://docs.recoilpay.com/integrate/",
         contact(
-            name = "OIF Team",
-            url = "https://github.com/openintentsframework/"
-        )
+            name = "RecoilPay",
+            url = "https://docs.recoilpay.com/integrate/"
+        ),
     ),
 )]
 pub struct ApiDoc;

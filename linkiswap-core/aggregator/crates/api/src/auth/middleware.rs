@@ -46,6 +46,17 @@ impl Default for AuthConfig {
 			public_paths: vec![
 				// Liveness.
 				"/health".to_string(),
+				// API documentation: Swagger UI and the raw spec. Both are
+				// read-only and describe only the anonymous integration
+				// surface below — `openapi::ApiDoc` deliberately omits
+				// every `/solver-api/*` path, so publishing the spec
+				// discloses nothing that is not already public. Prefix
+				// entries, because Swagger UI serves its own assets
+				// underneath `/swagger-ui/`. Compiled out entirely unless
+				// the `openapi` feature is on; harmless when it is off,
+				// since the routes then do not exist.
+				"/swagger-ui".to_string(),
+				"/api-docs".to_string(),
 				// The end-user swap surface. Users are anonymous by
 				// design: they authorise with an on-chain signature on
 				// the order itself, not with an account here.
@@ -360,8 +371,38 @@ mod deny_by_default_tests {
 			"/solver-api/account/register",
 			"/ws/orders",
 			"/solver-api/workers/worker-1/heartbeat",
+			// Docs: the UI, its nested assets, and the raw spec. A
+			// 401 here makes the "Try it out" surface unusable.
+			"/swagger-ui",
+			"/swagger-ui/",
+			"/swagger-ui/index.html",
+			"/api-docs/openapi.json",
 		] {
 			assert!(is_public(&cfg, path), "{path} must stay reachable anonymously");
+		}
+	}
+
+	/// Matching is a naive `starts_with`, so every allowlist entry opens its
+	/// whole prefix namespace — `/swagger-ui` would also match a route
+	/// called `/swagger-ui-admin`. No such route exists, and tightening the
+	/// match to segment boundaries would change behaviour for all ten
+	/// existing entries, so this test just pins the property that makes the
+	/// blunt match acceptable: nothing sensitive shares a prefix with the
+	/// public list.
+	#[test]
+	fn no_sensitive_path_shares_a_public_prefix() {
+		let cfg = AuthConfig::default();
+		for path in [
+			"/solver-api/operators/solver-abc/sign-fill",
+			"/solver-api/operators/solver-abc/api-key",
+			"/solver-api/orders/claim",
+			"/solver-api/telemetry",
+			"/solver-api/vaults",
+		] {
+			assert!(
+				!is_public(&cfg, path),
+				"{path} must not be reachable via a public prefix"
+			);
 		}
 	}
 

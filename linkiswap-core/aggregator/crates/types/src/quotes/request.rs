@@ -169,31 +169,56 @@ impl SolverOptions {
 /// API request body for /api/v1/quotes endpoint
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[cfg_attr(feature = "openapi", derive(ToSchema))]
+// Swap 1 USDC on Base Sepolia for USDC on Optimism Sepolia.
+//
+// This example is the body Swagger UI pre-fills for "Try it out", so it
+// has to be a request that actually works. Three things it gets right
+// that the previous (upstream) example did not:
+//
+//   * `user` and `supportedTypes` are present. Both are required and
+//     non-optional, so a body without them fails to deserialise before
+//     validation even runs.
+//   * No `minValidUntil`. This deployment copies that value verbatim
+//     into the authorization's absolute `validBefore`, so a relative
+//     `600` yields an order that expired in 1970. Omitting it lets the
+//     solver set a proper absolute deadline and report it as
+//     `validUntil` on the quote.
+//   * `permit2` / `oif-escrow-v0` only. Offering `eip3009` lets a
+//     solver prefer it, and that open path currently reverts on-chain
+//     with `SignatureAndInputsNotEqual`.
+//
+// Addresses are ERC-7930 interop-encoded (version 0x0001, chainType
+// 0x0000 for EIP-155, minimal big-endian chainRef, then the 20 address
+// bytes) — plain 0x addresses are rejected. `014a34` is Base Sepolia
+// (84532); `aa37dc` is Optimism Sepolia (11155420).
 #[cfg_attr(feature = "openapi", schema(example = json!({
+    "user": "0x0001000003014a3414632bf0d0d6468908378c3ccfac4e788b115e0e55",
     "intent": {
         "intentType": "oif-swap",
         "inputs": [
             {
-                "user": "0x00010000027a691470997970C51812dc3A010C7d01b50e0d17dc79C8",
-                "asset": "0x00010000027a69145FbDB2315678afecb367f032d93F642f64180aa3",
-                "amount": "1000000000000000000"
+                "user": "0x0001000003014a3414632bf0d0d6468908378c3ccfac4e788b115e0e55",
+                "asset": "0x0001000003014a341473c83dacc74bb8a704717ac09703b959e74b9705",
+                "amount": "1000000"
             }
         ],
         "outputs": [
             {
-                "receiver": "0x00010000027a6a143C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
-                "asset": "0x00010000027a6a145FbDB2315678afecb367f032d93F642f64180aa3",
-                "amount": "1000000"
+                "receiver": "0x0001000003aa37dc14632bf0d0d6468908378c3ccfac4e788b115e0e55",
+                "asset": "0x0001000003aa37dc14191688b2ff5be8f0a5bcab3e819c900a810faaf6"
             }
         ],
         "swapType": "exact-input",
-        "minValidUntil": 600,
-        "preference": "speed",
-        "partialFill": false
+        "originSubmission": {
+            "mode": "user",
+            "schemes": ["permit2"]
+        }
     },
+    "supportedTypes": ["oif-escrow-v0"],
     "solverOptions": {
-        "timeout": 4000,
-        "solverTimeout": 2000
+        "timeout": 8000,
+        "solverTimeout": 5000,
+        "minQuotes": 1
     }
 })))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

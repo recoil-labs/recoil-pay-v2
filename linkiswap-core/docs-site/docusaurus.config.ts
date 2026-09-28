@@ -64,9 +64,26 @@ const config: Config = {
           label: 'User Guide',
         },
         {
+          type: 'docSidebar',
+          sidebarId: 'developers',
+          position: 'left',
+          label: 'Developers',
+        },
+        // Swagger UI served by the aggregator itself (the `openapi` cargo
+        // feature). Declared before "Open the app" so the product CTA stays
+        // the rightmost item — Docusaurus lays right-positioned items out in
+        // declaration order.
+        {
+          href: 'https://recoil-aggregator-675174162902.us-central1.run.app/swagger-ui',
+          label: 'Interactive API Reference',
+          position: 'right',
+          className: 'navbar-api-cta',
+        },
+        {
           href: 'https://v2.recoilpay.com',
           label: 'Open the app',
           position: 'right',
+          className: 'navbar-app-cta',
         },
       ],
     },
@@ -79,6 +96,19 @@ const config: Config = {
             { label: 'Open the app', href: 'https://v2.recoilpay.com' },
             { label: 'Quickstart', to: '/quickstart' },
             { label: 'Writing intents', to: '/writing-intents' },
+          ],
+        },
+        {
+          title: 'Developers',
+          items: [
+            { label: 'Integrate RecoilPay', to: '/integrate/' },
+            { label: 'Forward your first intent', to: '/integrate/quickstart' },
+            { label: 'API reference', to: '/integrate/api-reference' },
+            {
+              label: 'API playground',
+              href: 'https://recoil-aggregator-675174162902.us-central1.run.app/swagger-ui',
+            },
+            { label: 'Run a solver', href: 'https://solver.recoilpay.com' },
           ],
         },
         {
