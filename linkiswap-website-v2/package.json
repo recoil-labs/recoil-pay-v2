@@ -50,8 +50,5 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite": "^6"
-  },
-  "overrides": {
-    "qr": "0.5.5"
   }
 }
