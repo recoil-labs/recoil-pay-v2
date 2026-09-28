@@ -628,10 +628,6 @@ where
 					None
 				}
 			},
-			// Natural-language intent parsing. Optional: without
-			// HF_ACCESS_TOKEN the endpoint answers 503 and the intent UI
-			// falls back to asking for the template form.
-			intent_parser: oif_api::intent_parser::IntentParser::from_env().map(Arc::new),
 		};
 
 		// Create router with state

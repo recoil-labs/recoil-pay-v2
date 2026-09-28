@@ -28,7 +28,6 @@ fn documents_the_whole_public_integration_surface() {
 	for path in [
 		"/health",
 		"/api/v1/chains",
-		"/api/v1/intents/parse",
 		"/api/v1/solvers",
 		"/api/v1/quotes",
 		"/api/v1/orders",

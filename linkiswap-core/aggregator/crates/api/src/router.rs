@@ -17,7 +17,7 @@ use crate::handlers::{
 	get_chains, get_operator, get_operators, get_order, get_register_message,
 	get_settlement_contracts,
 	get_solver_by_id, get_solver_identities, get_solvers, get_supported_contracts,
-	get_solver_quotes, get_telemetry, get_vault_balances, get_worker, health, post_parse_intent,
+	get_solver_quotes, get_telemetry, get_vault_balances, get_worker, health,
 	operator_heartbeat, post_account_register, post_account_unregister, post_orders,
 	post_quotes, post_quotes_submit, post_trust_components, post_vault_snapshot,
 	claim_orders, extend_order_claim, record_fill_outcome, register_worker, rotate_api_key,
@@ -67,7 +67,6 @@ pub fn create_router() -> Router<AppState> {
 		.route("/health", get(health))
 		.route("/health/", get(health))
 		.route("/api/v1/chains", get(get_chains))
-		.route("/api/v1/intents/parse", post(post_parse_intent))
 		.route("/api/v1/quotes", post(post_quotes))
 		.route("/api/v1/quotes/", post(post_quotes))
 		.route("/quotes/submit", post(post_quotes_submit))

@@ -25,13 +25,16 @@ ARG VITE_OIF_API_BASE_URL
 ARG VITE_WALLETCONNECT_PROJECT_ID
 ARG VITE_GHOST_API_URL
 ARG VITE_GHOST_CONTENT_KEY
-# No Hugging Face token here: intent parsing runs on the aggregator
-# (POST /api/v1/intents/parse), which holds it server-side. Anything
-# passed as a VITE_* build arg ends up in the public bundle.
+# Intent parsing calls Hugging Face straight from the browser, so this
+# token is inlined into the shipped bundle and is public. It is not a
+# server-side secret; treat it as a throwaway and proxy the calls
+# through a backend before launch.
+ARG VITE_HF_ACCESS_TOKEN
 ENV VITE_OIF_API_BASE_URL=$VITE_OIF_API_BASE_URL \
     VITE_WALLETCONNECT_PROJECT_ID=$VITE_WALLETCONNECT_PROJECT_ID \
     VITE_GHOST_API_URL=$VITE_GHOST_API_URL \
-    VITE_GHOST_CONTENT_KEY=$VITE_GHOST_CONTENT_KEY
+    VITE_GHOST_CONTENT_KEY=$VITE_GHOST_CONTENT_KEY \
+    VITE_HF_ACCESS_TOKEN=$VITE_HF_ACCESS_TOKEN
 RUN npm run build
 
 FROM nginx:1.27-alpine

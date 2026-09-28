@@ -5,7 +5,6 @@
 pub mod auth;
 pub mod fill_routing;
 pub mod handlers;
-pub mod intent_parser;
 pub mod order_broadcast;
 pub mod pagination;
 pub mod router;

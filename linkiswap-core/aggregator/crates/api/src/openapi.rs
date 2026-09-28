@@ -26,15 +26,12 @@ use oif_types::quotes::response::QuotesResponse;
 use oif_types::solvers::response::{SolverResponse, SolversResponse};
 
 use crate::handlers::chains::ChainsResponse;
-use crate::handlers::intents::{ParseIntentRequest, ParseIntentResponse};
-use crate::intent_parser::{AmountKind, IntentAction, RawIntent};
 
 #[derive(OpenApi)]
 #[openapi(
     paths(
         crate::handlers::health::health,
         crate::handlers::chains::get_chains,
-        crate::handlers::intents::post_parse_intent,
         crate::handlers::solvers::get_solvers,
         crate::handlers::solvers::get_solver_by_id,
         crate::handlers::quotes::post_quotes,
@@ -46,11 +43,9 @@ use crate::intent_parser::{AmountKind, IntentAction, RawIntent};
         OrderRequest, OrderResponse,
         SolverResponse, SolversResponse,
         ChainsResponse,
-        ParseIntentRequest, ParseIntentResponse, RawIntent, IntentAction, AmountKind,
         HealthResponse, StorageHealthInfo, SolverStats
     )),
     tags(
-        (name = "intents", description = "Turn a plain-English request into structured swap and send intents."),
         (name = "quotes", description = "Price an intent against every eligible solver in parallel."),
         (name = "orders", description = "Submit a signed order and track it to settlement."),
         (name = "chains", description = "Supported chains, settlement contracts, and token metadata."),
