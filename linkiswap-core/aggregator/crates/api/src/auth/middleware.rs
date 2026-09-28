@@ -64,6 +64,11 @@ impl Default for AuthConfig {
 				"/api/v1/orders".to_string(),
 				"/api/v1/quotes".to_string(),
 				"/api/v1/chains".to_string(),
+				// Turns the user's plain-English request into intents
+				// before they have connected anything. Rate-limited per
+				// IP inside the handler, since each call is a paid
+				// model request.
+				"/api/v1/intents".to_string(),
 				// Registration bootstrap: an operator has no credential
 				// until these succeed. Both verify an EIP-191 signature
 				// internally, so they are not unauthenticated in effect.

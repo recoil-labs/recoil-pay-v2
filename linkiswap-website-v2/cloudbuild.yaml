@@ -14,23 +14,14 @@ substitutions:
   _GHOST_API_URL: https://blog.linkiswap.com
   _GHOST_CONTENT_KEY: b7b8a55d27339a0bf9fe906c10
 
-# The Hugging Face token is pulled from Secret Manager rather than kept
-# in this file, which is committed. Note that it is still a build arg
-# feeding a VITE_* variable, so it lands in the public bundle regardless
-# — Secret Manager only keeps it out of the repo and out of the build
-# substitution record.
-availableSecrets:
-  secretManager:
-    - versionName: projects/$PROJECT_ID/secrets/VITE_HF_ACCESS_TOKEN/versions/latest
-      env: HF_TOKEN
+# No Hugging Face token: intent parsing moved to the aggregator
+# (POST /api/v1/intents/parse), which reads it at runtime. It must never
+# come back as a build arg — VITE_* values are baked into the public
+# bundle.
 
 steps:
-  # bash entrypoint rather than plain docker args: secretEnv values are
-  # only expanded inside a shell, not in an args list.
   - name: gcr.io/cloud-builders/docker
     entrypoint: bash
-    secretEnv:
-      - HF_TOKEN
     args:
       - -c
       - |
@@ -39,7 +30,6 @@ steps:
           --build-arg=VITE_WALLETCONNECT_PROJECT_ID=${_WALLETCONNECT_PROJECT_ID} \
           --build-arg=VITE_GHOST_API_URL=${_GHOST_API_URL} \
           --build-arg=VITE_GHOST_CONTENT_KEY=${_GHOST_CONTENT_KEY} \
-          --build-arg=VITE_HF_ACCESS_TOKEN="$$HF_TOKEN" \
           -t us-central1-docker.pkg.dev/$PROJECT_ID/recoil/website-v2:latest \
           .
 

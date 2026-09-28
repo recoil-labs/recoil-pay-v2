@@ -49,4 +49,9 @@ pub struct AppState {
 	/// server-to-server calls (`x-worker-token` header). `None` disables
 	/// the token path entirely. Sourced from `FILL_WORKER_TOKEN`.
 	pub worker_token: Option<String>,
+
+	/// Natural-language intent parser behind `POST /api/v1/intents/parse`.
+	/// Holds the Hugging Face token server-side. `None` (no
+	/// `HF_ACCESS_TOKEN`) makes that endpoint answer 503.
+	pub intent_parser: Option<Arc<crate::intent_parser::IntentParser>>,
 }

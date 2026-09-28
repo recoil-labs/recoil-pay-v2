@@ -1,6 +1,7 @@
 pub mod common;
 pub mod chains;
 pub mod health;
+pub mod intents;
 pub mod operators;
 pub mod orders;
 pub mod quotes;
@@ -10,6 +11,7 @@ pub mod workers;
 
 pub use chains::get_chains;
 pub use health::health;
+pub use intents::post_parse_intent;
 pub use operators::{
 	delete_settlement_contract, generate_operator_key, get_operator, get_operators,
 	get_settlement_contracts, operator_heartbeat, record_fill_outcome, rotate_api_key,
