@@ -8,7 +8,7 @@ intent UI, and the solver operator portal.
 | `linkiswap-core/`       | Aggregator, fill worker, solver, Solana settler     | Rust + Anchor      |
 | `linkiswap-website-v2/` | Intent UI — natural-language swap entry             | React + Vite       |
 | `solvers/`              | Solver operator portal — onboarding, quotes, orders | React + Vite       |
-| `recoilpay-intent-kit/` | Embeddable intent SDK — `@recoilpay/intent-core` (headless flow); React + hosted widget next | TypeScript |
+| `recoilpay-intent-kit/` | Embeddable intent SDK — `@recoilpay/intent-core` (headless flow), `@recoilpay/intent-react` (drop-in component); hosted widget next | TypeScript |
 
 Directory names still carry the old brand; renaming them touches every
 Dockerfile and Cloud Build path, so it is deliberately deferred to the
