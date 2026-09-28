@@ -66,9 +66,14 @@ afterEach(() => {
 describe('<recoilpay-intent>', () => {
   it('renders into its own shadow root with the component styles', async () => {
     const { el } = await mount();
-    const style = el.shadowRoot!.querySelector('style')!;
-    expect(style.textContent).toContain('.rp-root');
-    expect(style.textContent).toContain('.rpw-picker');
+    // Constructed stylesheet where supported, <style> fallback otherwise (jsdom).
+    const shadow = el.shadowRoot!;
+    const css =
+      shadow.adoptedStyleSheets?.length
+        ? [...shadow.adoptedStyleSheets[0].cssRules].map((r) => r.cssText).join('\n')
+        : shadow.querySelector('style')!.textContent!;
+    expect(css).toContain('.rp-root');
+    expect(css).toContain('.rpw-picker');
     // Nothing leaks into the page.
     expect(document.head.querySelectorAll('style')).toHaveLength(0);
   });

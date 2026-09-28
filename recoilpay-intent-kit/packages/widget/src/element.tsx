@@ -51,10 +51,8 @@ export class RecoilPayIntentElement extends HTMLElement {
   connectedCallback() {
     if (!this.#root) {
       const shadow = this.shadowRoot ?? this.attachShadow({ mode: 'open' });
-      const style = document.createElement('style');
-      style.textContent = `${componentCss}\n${widgetCss}`;
       const mount = document.createElement('div');
-      shadow.replaceChildren(style, mount);
+      shadow.replaceChildren(...styleNodes(shadow), mount);
       this.#root = createRoot(mount);
     }
     this.#render();
@@ -101,6 +99,30 @@ export class RecoilPayIntentElement extends HTMLElement {
 
   #render() {
     this.#root?.render(<WidgetApp config={this.#config()} emit={this.#emit} />);
+  }
+}
+
+const CSS = `${componentCss}\n${widgetCss}`;
+let sharedSheet: CSSStyleSheet | null = null;
+
+/**
+ * Styles for the shadow root. Constructed stylesheets are preferred: they
+ * aren't subject to CSP `style-src`, so hosts with a strict policy don't need
+ * 'unsafe-inline', and one sheet is shared by every widget on the page.
+ * Browsers without them get a <style> element instead.
+ */
+function styleNodes(shadow: ShadowRoot): Node[] {
+  try {
+    if (!sharedSheet) {
+      sharedSheet = new CSSStyleSheet();
+      sharedSheet.replaceSync(CSS);
+    }
+    shadow.adoptedStyleSheets = [sharedSheet];
+    return [];
+  } catch {
+    const style = document.createElement('style');
+    style.textContent = CSS;
+    return [style];
   }
 }
 
