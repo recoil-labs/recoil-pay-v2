@@ -18,7 +18,7 @@ export function Swap() {
   const wallet = useWagmiIntentWallet();          // null until connected
   const { openConnectModal } = useConnectModal();
 
-  return <RecoilIntent wallet={wallet} onConnectWallet={openConnectModal} />;
+  return <RecoilIntent hfAccessToken={HF_TOKEN} wallet={wallet} onConnectWallet={openConnectModal} />;
 }
 ```
 
@@ -38,6 +38,7 @@ import { RecoilIntent, viemWallet } from '@recoilpay/intent-react';
 
 | Prop | Type | |
 |---|---|---|
+| `hfAccessToken` | `string \| null` | Your Hugging Face token for plain-English parsing (see Notes). |
 | `wallet` | `IntentWallet \| null` | The connected wallet. |
 | `onConnectWallet` | `() => void` | Opens your connect flow. |
 | `theme` | `{ mode, accent, accentText, radius, fontFamily }` | `mode` is `'dark'` (default) or `'light'`. It uses your page's font unless you set one. |
@@ -76,6 +77,7 @@ const intent = useRecoilIntent({ wallet });
 
 ## Notes
 
+- **Hugging Face token:** Plain-English parsing calls a language model on Hugging Face **from the browser**, with your own access token. The token is visible to anyone who loads your page, so use a fine-grained token with only the "Make calls to Inference Providers" permission, use it for nothing else, and rotate it if it's abused. Without a token, parsing is off and users see an example sentence.
 - **Testnets only** for now: Base Sepolia, OP Sepolia, Ethereum Sepolia and Polygon Amoy, with mock tokens.
 - **The first swap of a token needs a one-time Permit2 approval.** The confirm card says so before it happens.
 - **Requirements:** React 18+, and viem 2 as a peer dependency. wagmi is optional and only needed for `@recoilpay/intent-react/wagmi`.

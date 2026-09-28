@@ -28,6 +28,8 @@ export interface RecoilIntentProps {
   session?: IntentSession;
   /** The connected wallet, or null. With wagmi, use `useWagmiIntentWallet()`. */
   wallet?: IntentWallet | null;
+  /** Your Hugging Face access token for plain-English parsing (visible in the page; use an inference-only token). */
+  hfAccessToken?: string | null;
   /** Open your app's wallet connect flow. Shown when a wallet is needed. */
   onConnectWallet?: () => void;
   /** Suggestions under the field. `false` hides them. */
@@ -66,7 +68,7 @@ function themeVars(theme: RecoilTheme = {}): CSSProperties {
  * Import `@recoilpay/intent-react/styles.css` once.
  */
 export function RecoilIntent(props: RecoilIntentProps) {
-  const intent = useRecoilIntent({ apiUrl: props.apiUrl, session: props.session, wallet: props.wallet });
+  const intent = useRecoilIntent({ apiUrl: props.apiUrl, session: props.session, wallet: props.wallet, hfAccessToken: props.hfAccessToken });
   const [value, setValue] = useState(props.defaultValue ?? '');
   const examples = props.examples === false ? [] : (props.examples ?? DEFAULT_EXAMPLES);
   useLifecycleCallbacks(intent, props);

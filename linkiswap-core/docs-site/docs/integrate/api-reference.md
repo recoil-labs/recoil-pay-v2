@@ -5,7 +5,7 @@ sidebar_position: 5
 
 # API reference
 
-The public integration surface. Six routes, no authentication, JSON in and out. Keys are camelCase everywhere except [`/api/v1/chains`](#get-apiv1chains), which is snake_case.
+The public integration surface. Five routes, no authentication, JSON in and out. Keys are camelCase everywhere except [`/api/v1/chains`](#get-apiv1chains), which is snake_case.
 
 ```bash
 export RECOIL_API=https://api.recoilpay.com
@@ -16,7 +16,6 @@ export RECOIL_API=https://api.recoilpay.com
 | `GET` | `/health` | Liveness |
 | `GET` | [`/api/v1/chains`](#get-apiv1chains) | Chains, settlement contracts, tokens |
 | `GET` | [`/api/v1/solvers`](#get-apiv1solvers) | Registered solvers and their assets |
-| `POST` | [`/api/v1/intents/parse`](#post-apiv1intentsparse) | Plain English → structured intents |
 | `POST` | [`/api/v1/quotes`](#post-apiv1quotes) | Price an intent |
 | `POST` | [`/api/v1/orders`](#post-apiv1orders) | Submit a signed order |
 | `GET` | [`/api/v1/orders/{id}`](#get-apiv1ordersid) | Order status |
@@ -110,60 +109,6 @@ Registered solvers and the assets each can fill. Paginated: `?page=1&page_size=2
 The union of `supportedAssets.assets` across solvers with `status: "active"` is your executable set. Gate your UI on it — inactive solvers won't quote, so including their assets means offering routes that return no quotes.
 
 Note that addresses here are plain `0x` addresses with a separate `chainId`, not interop-encoded. You encode when you build the intent.
-
----
-
-## `POST /api/v1/intents/parse`
-
-Turns what a user typed into structured intents. It's what the [drop-in UI](./drop-in-ui) calls. You only need it directly if you're building your own natural-language input.
-
-```bash
-curl -s -X POST "$RECOIL_API/api/v1/intents/parse" \
-  -H 'Content-Type: application/json' \
-  -d '{ "text": "swap 10 USDC on base sepolia for USDC on op sepolia" }'
-```
-
-```json
-{
-  "intents": [
-    {
-      "action": "swap",
-      "amount": "10",
-      "amountKind": "token",
-      "tokenIn": "USDC",
-      "chainIn": "base sepolia",
-      "tokenOut": "USDC",
-      "chainOut": "op sepolia",
-      "recipient": null
-    }
-  ]
-}
-```
-
-| Field | |
-|---|---|
-| `action` | `swap` or `send` |
-| `amount` | Decimal string as the user wrote it, like `"10"` or `"0.5"`, **not** base units. `null` if unstated. |
-| `amountKind` | `usd` when the user wrote dollars ("$20 of ETH"), otherwise `token` |
-| `tokenIn`, `chainIn`, `tokenOut`, `chainOut` | The **raw words** the user typed ("usdc", "arb"), not addresses or chain ids. Resolve them against [`/api/v1/solvers`](#get-apiv1solvers) assets. |
-| `recipient` | Address or ENS name. Required for `send`, optional for `swap`. |
-
-A sentence with several intents ("swap … then send …") returns one entry per intent, in order.
-
-Parsing only extracts what was said. It doesn't check that a token or chain is supported, that an amount is affordable, or that an address is valid. Validate against live solver coverage before you quote, as the [headless SDK](./sdk#building-blocks) does with `validateIntent`.
-
-| Status | Meaning |
-|---|---|
-| `200` | Intents found |
-| `400` | `text` is empty or longer than **500 characters** |
-| `422` | `UNRECOGNIZED_INTENT`: no swap or send could be found. Show the user an example sentence. |
-| `429` | Rate limited: **20 requests per minute per IP**. The message says when to retry. |
-| `502` | The parsing model failed. Retry shortly. |
-| `503` | Parsing isn't configured on this deployment |
-
-:::note Rate limit
-Parsing is the only route here that runs a model on every call, so it's rate-limited per client IP. Browser integrations are unaffected: each of your users has their own IP. If you call it from a server on your users' behalf, [talk to us](./going-live#talk-to-us) first.
-:::
 
 ---
 

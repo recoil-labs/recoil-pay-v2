@@ -1,5 +1,6 @@
 import { formatUnits, type Abi, type Address } from 'viem';
 import { createApiClient, type ApiClient, type ApiOptions, type ChainInfo } from './api';
+import { parseIntent, type ParserOptions } from './parse';
 import { chainName, explorerUrl, rpcReaders, SOLANA_CHAIN_IDS, type ChainReader } from './chains';
 import { buildSupportedSet, EMPTY_SUPPORTED, findAsset, normalizeToken, type SupportedSet } from './intent/registry';
 import { resolveIntent } from './intent/resolve';
@@ -99,11 +100,22 @@ export interface IntentSession {
   /** Connect, switch or disconnect. A pending intent continues automatically. */
   setWallet(wallet: IntentWallet | null): void;
   refreshAssets(): Promise<void>;
+  /** Set or replace the Hugging Face token used for parsing (null turns parsing off). */
+  setHfAccessToken(token: string | null): void;
   /** Stop polling and drop listeners. */
   destroy(): void;
 }
 
 export interface SessionOptions extends ApiOptions {
+  /**
+   * Your Hugging Face access token, for turning plain English into intents.
+   * Parsing runs in the browser, so the token is visible to anyone who loads
+   * the page: use a dedicated, inference-only token. Without one, `run()`
+   * answers with the example-sentence hint.
+   */
+  hfAccessToken?: string | null;
+  /** Hugging Face model for parsing. */
+  hfModel?: ParserOptions['model'];
   /** Share one client across sessions; otherwise built from `apiUrl`/`fetch`. */
   api?: ApiClient;
   wallet?: IntentWallet | null;
@@ -187,6 +199,7 @@ export function createIntentSession(options: SessionOptions = {}): IntentSession
   const reader = options.chainReader ?? rpcReaders(chains);
 
   let wallet: IntentWallet | null = options.wallet ?? null;
+  let hfAccessToken = options.hfAccessToken ?? null;
   let supported: SupportedSet = EMPTY_SUPPORTED;
   let queue: RawIntent[] = [];
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
@@ -403,7 +416,7 @@ export function createIntentSession(options: SessionOptions = {}): IntentSession
     stopPolling();
     set({ ...INITIAL, assetsLoading: state.assetsLoading, assetsError: state.assetsError, ready: state.ready, isConnected: Boolean(wallet), phase: 'parsing' });
 
-    const parsed = await api.parse(text);
+    const parsed = await parseIntent(text, { hfAccessToken, model: options.hfModel, fetch: api.fetch });
     if (gen !== generation) return;
     if (!parsed.ok) return set({ phase: 'offTemplate', hint: parsed.message });
 
@@ -448,6 +461,9 @@ export function createIntentSession(options: SessionOptions = {}): IntentSession
     reset,
     setWallet,
     refreshAssets,
+    setHfAccessToken(token) {
+      hfAccessToken = token;
+    },
     destroy() {
       generation++;
       stopPolling();

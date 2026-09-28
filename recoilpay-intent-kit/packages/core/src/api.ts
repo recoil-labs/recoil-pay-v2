@@ -1,4 +1,3 @@
-import type { ParseResult, RawIntent } from './intent/types';
 import type {
   OrderRequest,
   OrderResponse,
@@ -10,12 +9,6 @@ import type {
 
 /** Production aggregator. Override with `apiUrl` for staging or a local instance. */
 export const DEFAULT_API_URL = 'https://api.recoilpay.com';
-
-export const TEMPLATE_HINT =
-  'Try: swap <amount> <token> on <chain> for <token> on <chain> [to <address>] (e.g. swap 10 USDC on Base for ETH on Arbitrum) OR send <amount> <token> on <chain> to <address>';
-
-/** Matches the aggregator's cap; longer text is rejected there with a 400. */
-export const MAX_INTENT_CHARS = 500;
 
 export interface ApiOptions {
   /** Aggregator base URL, without the `/api/v1` suffix. Defaults to production. */
@@ -73,37 +66,8 @@ export function createApiClient(options: ApiOptions = {}) {
   const post = <T>(path: string, body: unknown) => request<T>(path, { method: 'POST', body: JSON.stringify(body) });
 
   return {
-    /**
-     * Turn plain English into intents (POST /api/v1/intents/parse). Never
-     * throws: every failure becomes `{ ok: false, message }` with text that
-     * can be shown to the user as-is.
-     */
-    async parse(text: string): Promise<ParseResult> {
-      const norm = text.trim();
-      if (!norm) return { ok: false, offTemplate: true, message: TEMPLATE_HINT };
-      if (norm.length > MAX_INTENT_CHARS) {
-        return { ok: false, offTemplate: true, message: `Keep it under ${MAX_INTENT_CHARS} characters. ${TEMPLATE_HINT}` };
-      }
-      try {
-        const { intents } = await post<{ intents: RawIntent[] }>('/intents/parse', { text: norm });
-        return intents?.length ? { ok: true, intents } : { ok: false, offTemplate: true, message: TEMPLATE_HINT };
-      } catch (err) {
-        if (!(err instanceof ApiError)) {
-          return { ok: false, offTemplate: true, message: 'Could not reach RecoilPay. Check your connection and try again.' };
-        }
-        switch (err.status) {
-          case 400:
-          case 422:
-            return { ok: false, offTemplate: true, message: TEMPLATE_HINT };
-          case 429:
-            return { ok: false, offTemplate: true, message: 'Too many requests — wait a moment and try again.' };
-          case 503:
-            return { ok: false, offTemplate: true, message: `Natural-language parsing is unavailable right now. ${TEMPLATE_HINT}` };
-          default:
-            return { ok: false, offTemplate: true, message: `Failed to understand that. ${TEMPLATE_HINT}` };
-        }
-      }
-    },
+    /** The fetch this client uses (shared with the session's parser). */
+    fetch: doFetch,
 
     /** Supported chains with RPC endpoints and settlement contracts. */
     async getChains(): Promise<ChainInfo[]> {

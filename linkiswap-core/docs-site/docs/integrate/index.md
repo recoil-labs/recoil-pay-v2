@@ -65,7 +65,7 @@ Right for: custom designs, and apps not built with React.
 
 Call `/api/v1/quotes` with a structured intent, get the user's signature and submit it. The rest of this section documents this path, and it's what [v2.recoilpay.com](https://v2.recoilpay.com) itself does: the app is a client of the same public API you'd use.
 
-Want a natural-language input on top? [`POST /api/v1/intents/parse`](./api-reference#post-apiv1intentsparse) turns what a user typed into structured intents, so you don't need to run a parser. The phrasing it understands is described in [Writing intents](../writing-intents).
+Want a natural-language input on top? The RecoilPay app turns what a user types into structured intents with a language model called from the browser, and the [headless SDK](./sdk#building-blocks) exports that same parser (`parseIntent`) for your own Hugging Face token. There's no server endpoint that accepts a sentence. The phrasing it understands is described in [Writing intents](../writing-intents).
 
 Right for: wallets, exchanges, payment flows, treasury tools, agents, and backends.
 

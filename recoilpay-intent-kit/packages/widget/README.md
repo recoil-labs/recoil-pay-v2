@@ -5,7 +5,10 @@ RecoilPay intents on any website, with no framework or build step. Add one scrip
 ```html
 <script type="module" src="https://cdn.jsdelivr.net/npm/@recoilpay/intent-widget@0.1/dist/recoilpay-intent-widget.js"></script>
 
-<recoilpay-intent walletconnect-project-id="YOUR_REOWN_PROJECT_ID"></recoilpay-intent>
+<recoilpay-intent
+  hf-access-token="YOUR_HUGGING_FACE_TOKEN"
+  walletconnect-project-id="YOUR_REOWN_PROJECT_ID"
+></recoilpay-intent>
 ```
 
 It works in plain HTML, WordPress, Webflow, Vue, Angular, Svelte, or anywhere else you can place an element. If your app is built with React, use `@recoilpay/intent-react` instead.
@@ -31,6 +34,7 @@ document.querySelector('recoilpay-intent').provider = window.ethereum; // any EI
 
 | Attribute | Example | |
 |---|---|---|
+| `hf-access-token` | `hf_…` | Your Hugging Face token for plain-English parsing (see Notes). Without it, parsing is off. |
 | `walletconnect-project-id` | `a1b2…` | Your Reown project id. Without it, only browser wallets are offered. |
 | `mode` | `light` | `dark` (default) or `light`. |
 | `accent` | `#0a7cff` | Buttons, focus ring and highlights. |
@@ -79,6 +83,7 @@ python3 -m http.server 5299
 
 ## Notes
 
+- **Hugging Face token:** Plain-English parsing calls a language model on Hugging Face **from the browser**, with your own access token. The token is visible to anyone who loads your page, so use a fine-grained token with only the "Make calls to Inference Providers" permission, use it for nothing else, and rotate it if it's abused. Without a token, parsing is off and users see an example sentence.
 - **Testnets only** for now: Base Sepolia, OP Sepolia, Ethereum Sepolia and Polygon Amoy, with mock tokens.
 - **The first swap of a token needs a one-time Permit2 approval.** The widget explains this before it happens.
 - **Browser requirements:** module scripts, custom elements and Shadow DOM. Every current browser qualifies.

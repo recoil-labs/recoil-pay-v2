@@ -11,6 +11,7 @@ function setup(opts: { aggregator?: Parameters<typeof fakeAggregator>[0]; allowa
   const { api, agg } = fakeAggregator(opts.aggregator);
   const session: IntentSession = createIntentSession({
     api,
+    hfAccessToken: 'hf_test',
     pollIntervalMs: 10,
     chainReader: async () => fakeReader(opts.allowance ?? 10n ** 30n) as never,
   });
@@ -106,7 +107,7 @@ describe('<RecoilIntent />', () => {
     await waitFor(() => expect(session.getState().ready).toBe(true));
     await userEvent.setup().click(screen.getByRole('button', { name: 'Quick swap' }));
     await screen.findByText('Best solver route');
-    expect(agg.calls.find((c) => c.path === '/intents/parse')?.body).toEqual({ text: 'swap 1 usdc' });
+    expect(agg.calls.find((c) => c.path === 'hf')?.body.text).toBe('swap 1 usdc');
   });
 
   it('reports errors to the host and offers a way out', async () => {
@@ -131,6 +132,16 @@ describe('<RecoilIntent />', () => {
     expect(root.style.getPropertyValue('--rp-radius')).toBe('4px');
     expect(root.style.getPropertyValue('--rp-font')).toBe('Georgia');
     expect(document.documentElement.style.length).toBe(0);
+  });
+
+  it('passes the hfAccessToken prop to the parser', async () => {
+    const { api, agg } = fakeAggregator();
+    const session = createIntentSession({ api, chainReader: async () => fakeReader(10n ** 30n) as never }); // no token of its own
+    render(<RecoilIntent session={session} wallet={fakeWallet()} hfAccessToken="hf_from_prop" />);
+    await waitFor(() => expect(session.getState().ready).toBe(true));
+    await type('swap 10 usdc');
+    await screen.findByText('Best solver route');
+    expect(agg.calls.find((c) => c.path === 'hf')?.body.auth).toBe('Bearer hf_from_prop');
   });
 
   it('keeps the run button disabled until the supported set has loaded', () => {

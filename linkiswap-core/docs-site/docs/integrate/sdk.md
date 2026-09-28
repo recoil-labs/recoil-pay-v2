@@ -18,7 +18,7 @@ npm install @recoilpay/intent-core viem
 ```ts
 import { createIntentSession, viemWallet } from '@recoilpay/intent-core';
 
-const session = createIntentSession();              // talks to api.recoilpay.com
+const session = createIntentSession({ hfAccessToken }); // your Hugging Face token; quotes go to api.recoilpay.com
 session.subscribe((state) => render(state));        // called after every change
 
 await session.run('swap 10 USDC on base sepolia for USDC on op sepolia');
@@ -107,6 +107,8 @@ Changing the wallet mid-flow is safe. A flow waiting in `needsWallet` continues,
 
 ```ts
 createIntentSession({
+  hfAccessToken,                       // your Hugging Face token for parsing; setHfAccessToken() to change it
+  hfModel,                             // Hugging Face model; defaults to the one the RecoilPay app uses
   apiUrl: 'https://api.recoilpay.com', // default
   wallet,                              // or setWallet() later
   pollIntervalMs: 2500,                // order-status polling
@@ -125,12 +127,12 @@ Every step is exported on its own, for when you want your own orchestration. For
 
 ```ts
 import {
-  createApiClient, buildSupportedSet, validateIntent, resolveIntent,
+  createApiClient, parseIntent, buildSupportedSet, validateIntent, resolveIntent,
   buildQuoteRequest, signQuote, buildOrderRequest,
 } from '@recoilpay/intent-core';
 
 const api = createApiClient();
-const parsed = await api.parse('swap 1 USDC on op sepolia for USDC on base sepolia');
+const parsed = await parseIntent('swap 1 USDC on op sepolia for USDC on base sepolia', { hfAccessToken });
 if (!parsed.ok) throw new Error(parsed.message);
 
 const supported = buildSupportedSet(await api.getSupportedAssets());

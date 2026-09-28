@@ -7,6 +7,8 @@ import { connectWalletConnect, walletConnectProvider } from './wallets/walletcon
 
 export interface WidgetConfig {
   apiUrl?: string;
+  /** The partner's own Hugging Face token for plain-English parsing. Without it, parsing is off. */
+  hfAccessToken: string | null;
   /** The partner's own WalletConnect project id. Without it, only browser wallets are offered. */
   walletConnectProjectId?: string;
   theme: RecoilTheme;
@@ -159,6 +161,7 @@ export function WidgetApp({ config, emit }: { config: WidgetConfig; emit: Emit }
     <div className="rpw" data-mode={mode} style={vars}>
       <RecoilIntent
         apiUrl={config.apiUrl}
+        hfAccessToken={config.hfAccessToken}
         wallet={intentWallet}
         onConnectWallet={onConnectWallet}
         theme={config.theme}

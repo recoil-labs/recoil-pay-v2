@@ -111,6 +111,23 @@ describe('<recoilpay-intent>', () => {
     expect(within(await again.shadow.findByRole('dialog')).getByRole('button', { name: /WalletConnect/ })).toBeTruthy();
   });
 
+  it('parses with the partner\'s hf-access-token, set before or after mounting', async () => {
+    const { fetch, agg } = fakeAggregator();
+    vi.stubGlobal('fetch', fetch);
+    const { el, shadow } = await mount({ examples: JSON.stringify([{ label: 'Go', sentence: 'swap 1 usdc' }]) });
+
+    // No token yet: parsing is off and Hugging Face is never called.
+    await waitFor(() => expect((shadow.getByRole('button', { name: 'Go' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(shadow.getByRole('button', { name: 'Go' }));
+    expect(await shadow.findByText(/isn't set up/)).toBeTruthy();
+    expect(agg.calls.some((c) => c.path === 'hf')).toBe(false);
+
+    el.setAttribute('hf-access-token', 'hf_partner');
+    await new Promise((r) => setTimeout(r, 50)); // let the attribute re-render land, as it would before any real click
+    fireEvent.click(shadow.getByRole('button', { name: 'Run intent' }));
+    await waitFor(() => expect(agg.calls.find((c) => c.path === 'hf')?.body.auth).toBe('Bearer hf_partner'));
+  });
+
   it('says so when no wallet is installed', async () => {
     const { shadow } = await mount();
     fireEvent.click(shadow.getByRole('button', { name: 'Connect wallet' }));

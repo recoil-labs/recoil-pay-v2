@@ -1,6 +1,7 @@
 import { vi } from 'vitest';
 import {
   createApiClient,
+  HF_ROUTER_URL,
   PERMIT2_ADDRESS,
   type IntentWallet,
   type OrderResponse,
@@ -86,6 +87,16 @@ export function fakeAggregator(overrides: Partial<Aggregator> = {}) {
     new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
   const fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+    if (String(url) === HF_ROUTER_URL) {
+      const body = JSON.parse(String(init?.body));
+      const text = body.messages.find((m: { role: string }) => m.role === 'user').content;
+      agg.calls.push({ method: 'POST', path: 'hf', body: { text, model: body.model, auth: (init?.headers as Record<string, string>).Authorization } });
+      const r = agg.parse(text);
+      if (r.status !== 200 && r.status !== 422) return json(r.status, r.body);
+      // What the model replies: the intents as JSON, or its "unrecognized" object.
+      const content = r.status === 422 ? '{"error": "unrecognized"}' : '```json\n' + JSON.stringify((r.body as { intents: unknown }).intents) + '\n```';
+      return json(200, { choices: [{ message: { role: 'assistant', content } }] });
+    }
     const path = String(url).replace('https://agg.test/api/v1', '');
     const method = init?.method ?? 'GET';
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
@@ -95,10 +106,6 @@ export function fakeAggregator(overrides: Partial<Aggregator> = {}) {
       return json(200, { totalSolvers: 1, solvers: [{ status: 'active', supportedAssets: { type: 'assets', assets: ASSETS } }] });
     }
     if (path === '/chains') return json(200, { data: [{ chain_id: 84532, name: 'base-sepolia', rpc_url: 'http://rpc' }] });
-    if (path === '/intents/parse') {
-      const r = agg.parse(body.text);
-      return json(r.status, r.body);
-    }
     if (path === '/quotes') {
       const quotes = agg.quotes[Math.min(quoteCall++, agg.quotes.length - 1)];
       return json(200, { quotes, totalQuotes: quotes.length, metadata: { solversQueried: 3, totalDurationMs: 420 } });

@@ -17,12 +17,12 @@ export {
   ApiError,
   createApiClient,
   DEFAULT_API_URL,
-  MAX_INTENT_CHARS,
-  TEMPLATE_HINT,
   type ApiClient,
   type ApiOptions,
   type ChainInfo,
 } from './api';
+// Plain English → intents, via Hugging Face from the browser.
+export { DEFAULT_INTENT_MODEL, extractIntents, HF_ROUTER_URL, parseIntent, TEMPLATE_HINT, type ParserOptions } from './parse';
 export { chainName, explorerUrl, rpcReaders, SOLANA_CHAIN_IDS, type ChainReader } from './chains';
 
 // Building blocks, for integrators composing their own flow.

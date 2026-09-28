@@ -13,7 +13,7 @@ npm install @recoilpay/intent-core viem
 ```ts
 import { createIntentSession, viemWallet } from '@recoilpay/intent-core';
 
-const session = createIntentSession();          // production aggregator by default
+const session = createIntentSession({ hfAccessToken }); // your Hugging Face token; production aggregator by default
 
 session.subscribe((state) => render(state));    // re-render on every change
 
@@ -67,6 +67,7 @@ Any other wallet SDK can implement `IntentWallet` directly: an address, `getChai
 
 ```ts
 createIntentSession({
+  hfAccessToken,                       // your Hugging Face token for parsing (setHfAccessToken() to change it)
   apiUrl: 'https://api.recoilpay.com', // default; point at staging or a local aggregator
   wallet,                              // or set it later with setWallet()
   pollIntervalMs: 2500,                // order-status polling
@@ -84,4 +85,4 @@ Every step is exported on its own: `createApiClient` (parse, chains, supported a
 - **Testnets only** for now: Base Sepolia, OP Sepolia, Ethereum Sepolia and Polygon Amoy, with mock tokens.
 - **Only the escrow (Permit2) route is requested.** The first swap of a token needs a one-time approval transaction, which `confirm()` handles.
 - **Same-chain sends skip solvers** and go straight from the wallet (`route: 'direct'`).
-- **Natural-language parsing** is `POST /api/v1/intents/parse` on the aggregator, which holds the model credentials. Nothing secret ships in this package.
+- **Natural-language parsing:** Plain-English parsing calls a language model on Hugging Face **from the browser**, with your own access token. The token is visible to anyone who loads your page, so use a fine-grained token with only the "Make calls to Inference Providers" permission, use it for nothing else, and rotate it if it's abused. Without a token, parsing is off and users see an example sentence. `parseIntent()` is exported for use on its own.

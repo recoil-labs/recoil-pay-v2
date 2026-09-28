@@ -27,7 +27,13 @@ export function Swap() {
   const wallet = useWagmiIntentWallet();        // null until connected
   const { openConnectModal } = useConnectModal();
 
-  return <RecoilIntent wallet={wallet} onConnectWallet={openConnectModal} />;
+  return (
+    <RecoilIntent
+      hfAccessToken={import.meta.env.VITE_HF_ACCESS_TOKEN}
+      wallet={wallet}
+      onConnectWallet={openConnectModal}
+    />
+  );
 }
 ```
 
@@ -35,6 +41,7 @@ That's it. Put `<Swap />` anywhere inside your existing `WagmiProvider`.
 
 - **`onConnectWallet`** runs when the component needs a wallet. Pass whatever opens your connect flow: RainbowKit's `openConnectModal`, ConnectKit's `setOpen(true)`, or your own.
 - **`wallet`** tells the component which account is connected. If a user types an intent before connecting, the flow waits and continues on its own once they connect.
+- **`hfAccessToken`** is your Hugging Face token for plain-English parsing, which runs in the browser. It ends up in your bundle, so use a fine-grained, inference-only token. See [Bring your own Hugging Face token](./drop-in-ui#bring-your-own-hugging-face-token).
 - **`@recoilpay/intent-react/wagmi`** is a separate entry point, so apps without wagmi never load it.
 
 Import the stylesheet once, anywhere in your app. It's scoped (see [Styling](#styling)).
@@ -63,6 +70,7 @@ Using another wallet SDK, such as an embedded or smart wallet? Implement `Intent
 
 | Prop | Type | |
 |---|---|---|
+| `hfAccessToken` | `string \| null` | Your Hugging Face token for plain-English parsing. Without it, parsing is off. |
 | `wallet` | `IntentWallet \| null` | The connected wallet. |
 | `onConnectWallet` | `() => void` | Opens your connect flow. |
 | `theme` | `{ mode, accent, accentText, radius, fontFamily }` | See [Styling](#styling). |

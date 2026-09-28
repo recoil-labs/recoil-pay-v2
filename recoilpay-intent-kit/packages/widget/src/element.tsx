@@ -7,6 +7,7 @@ import { WidgetApp, type WidgetConfig } from './WidgetApp';
 
 const ATTRIBUTES = [
   'api-url',
+  'hf-access-token',
   'walletconnect-project-id',
   'mode',
   'accent',
@@ -85,6 +86,7 @@ export class RecoilPayIntentElement extends HTMLElement {
     };
     return {
       apiUrl: attr('api-url'),
+      hfAccessToken: attr('hf-access-token') ?? null,
       walletConnectProjectId: attr('walletconnect-project-id'),
       theme,
       placeholder: attr('placeholder'),

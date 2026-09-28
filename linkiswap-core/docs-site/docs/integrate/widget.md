@@ -16,7 +16,10 @@ Add RecoilPay intents to any web page with one script tag and one element. There
 <script type="module" src="https://cdn.jsdelivr.net/npm/@recoilpay/intent-widget@0.1/dist/recoilpay-intent-widget.js"></script>
 
 <!-- Where you want it to appear. -->
-<recoilpay-intent walletconnect-project-id="YOUR_REOWN_PROJECT_ID"></recoilpay-intent>
+<recoilpay-intent
+  hf-access-token="YOUR_HUGGING_FACE_TOKEN"
+  walletconnect-project-id="YOUR_REOWN_PROJECT_ID"
+></recoilpay-intent>
 ```
 
 That's a complete integration. Open the page, type `swap 1 USDC on op sepolia for USDC on base sepolia`, and connect a wallet.
@@ -29,7 +32,15 @@ The element is 100% wide up to 640px, so place it in whatever container suits yo
 
 ---
 
-## 2. Set up WalletConnect (recommended)
+## 2. Add your Hugging Face token
+
+The widget turns what users type into intents by calling a language model on Hugging Face from their browser, with your token in `hf-access-token`. The token is visible in your page, so create a **fine-grained, inference-only** token used for nothing else. See [Bring your own Hugging Face token](./drop-in-ui#bring-your-own-hugging-face-token).
+
+Without it, the widget still quotes and settles, but typed sentences aren't understood and users see an example sentence instead.
+
+---
+
+## 3. Set up WalletConnect (recommended)
 
 Browser-extension wallets work with no setup: MetaMask, Rabby, Coinbase Wallet, Brave, Phantom, and any other wallet that supports [EIP-6963](https://eips.ethereum.org/EIPS/eip-6963). Mobile wallets connect over WalletConnect, which needs a **project id of your own**:
 
@@ -47,7 +58,7 @@ WalletConnect's code is about 450 KB gzipped, four times the rest of the widget.
 
 ---
 
-## 3. Listen for results (optional)
+## 4. Listen for results (optional)
 
 The widget reports what happens as DOM events. They bubble, so you can listen on `document`:
 
@@ -75,6 +86,7 @@ Everything is an attribute. Change one at any time and the widget updates in pla
 
 | Attribute | Default | |
 |---|---|---|
+| `hf-access-token` | none | Your Hugging Face token for plain-English parsing. Without it, parsing is off. |
 | `walletconnect-project-id` | none | Your Reown project id. Without it, only browser wallets are offered. |
 | `mode` | `dark` | `dark` or `light`. |
 | `accent` | RecoilPay violet | Buttons, focus ring and highlights, e.g. `#0a7cff`. |
@@ -146,7 +158,8 @@ If your site sends a CSP header, allow the following:
 | Directive | Allow | Why |
 |---|---|---|
 | `script-src` | `https://cdn.jsdelivr.net` (or your own origin, if self-hosting) | The widget and its chunks |
-| `connect-src` | `https://api.recoilpay.com` | Parsing, quotes, orders |
+| `connect-src` | `https://api.recoilpay.com` | Quotes, orders, supported assets |
+| `connect-src` | `https://router.huggingface.co` | Plain-English parsing |
 | `connect-src` | `https://*.publicnode.com` | Permit2 allowance reads, via the RPCs listed by [`/api/v1/chains`](./api-reference#get-apiv1chains) |
 | `connect-src` | `https://*.walletconnect.org wss://*.walletconnect.org https://*.walletconnect.com wss://*.walletconnect.com https://*.web3modal.org` | Only if you set a WalletConnect project id |
 | `img-src` | `data:` | Wallet icons supplied by wallets as data URIs |
@@ -168,6 +181,8 @@ The widget's own styles are applied as constructed stylesheets, so it doesn't ne
 | You see | Likely cause |
 |---|---|
 | The element is empty | The script didn't load. Check the network tab and your CSP `script-src`. |
+| "Natural-language parsing isn't set up here" | `hf-access-token` is missing or empty. |
+| Every sentence gets the example hint | The Hugging Face token is invalid or out of credit, or `router.huggingface.co` is blocked by your CSP. |
 | No WalletConnect option | `walletconnect-project-id` is missing or empty. |
 | WalletConnect QR never appears | The project id is wrong, or your origin isn't on the project's domain allowlist at cloud.reown.com. |
 | "No wallet found in this browser" | No extension wallet is installed and WalletConnect isn't configured. |
