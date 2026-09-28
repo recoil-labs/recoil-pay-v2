@@ -1,11 +1,17 @@
 {
   "name": "recoil-tags",
   "private": true,
-  "workspaces": ["web", "api"],
+  "workspaces": [
+    "web",
+    "api"
+  ],
   "scripts": {
     "dev:web": "npm run dev -w web",
     "dev:api": "npm run dev -w api",
     "build": "npm run build -w web && npm run typecheck -w api",
     "test": "npm test -w api"
+  },
+  "overrides": {
+    "qr": "0.5.5"
   }
 }
