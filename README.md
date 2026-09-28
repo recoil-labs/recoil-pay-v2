@@ -8,6 +8,7 @@ intent UI, and the solver operator portal.
 | `linkiswap-core/`       | Aggregator, fill worker, solver, Solana settler     | Rust + Anchor      |
 | `linkiswap-website-v2/` | Intent UI — natural-language swap entry             | React + Vite       |
 | `solvers/`              | Solver operator portal — onboarding, quotes, orders | React + Vite       |
+| `recoilpay-intent-kit/` | Embeddable intent SDK — `@recoilpay/intent-core` (headless flow); React + hosted widget next | TypeScript |
 
 Directory names still carry the old brand; renaming them touches every
 Dockerfile and Cloud Build path, so it is deliberately deferred to the
@@ -40,6 +41,7 @@ fire-and-forget broadcast silently dropped orders.
 cd linkiswap-core/aggregator && cargo build
 cd linkiswap-website-v2      && npm install --legacy-peer-deps && npm run dev
 cd solvers                   && npm install && npm run dev
+cd recoilpay-intent-kit      && npm install && npm test
 ```
 
 `--legacy-peer-deps` is required for the intent UI: RainbowKit 2.x
