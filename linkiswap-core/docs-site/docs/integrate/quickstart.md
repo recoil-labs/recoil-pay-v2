@@ -11,7 +11,7 @@ By the end of this page you'll have taken an intent, priced it against live solv
 **What you need:** an HTTP client, a funded testnet wallet ([how to fund one](../quickstart#2-fund-your-wallet-on-testnet)), and a way to produce an EIP-712 signature.
 
 ```bash
-export RECOIL_API=https://recoil-aggregator-675174162902.us-central1.run.app
+export RECOIL_API=https://api.recoilpay.com
 ```
 
 ---

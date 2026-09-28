@@ -70,7 +70,7 @@ That's useful signal and it's a small piece of work on our side. [Talk to us](./
 Every example in this section uses this origin:
 
 ```bash
-export RECOIL_API=https://recoil-aggregator-675174162902.us-central1.run.app
+export RECOIL_API=https://api.recoilpay.com
 ```
 
 Confirm you can reach it:
@@ -79,7 +79,7 @@ Confirm you can reach it:
 curl -s "$RECOIL_API/health"
 ```
 
-Prefer to click rather than curl? The same API is browsable, with a working pre-filled request, at **[`/swagger-ui`](https://recoil-aggregator-675174162902.us-central1.run.app/swagger-ui)** — see [Try it interactively](./api-reference#try-it-interactively).
+Prefer to click rather than curl? The same API is browsable, with a working pre-filled request, at **[`/swagger-ui`](https://api.recoilpay.com/swagger-ui)** — see [Try it interactively](./api-reference#try-it-interactively).
 
 :::caution The hostname is not stable yet
 That's a Cloud Run URL, and it will move to a permanent `api.recoilpay.com`-style hostname before mainnet. **Make it configurable** — read it from an environment variable rather than hardcoding it, exactly as the reference client does. [Tell us you're building on it](./going-live#talk-to-us) and we'll give you notice before it changes.

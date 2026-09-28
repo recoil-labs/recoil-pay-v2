@@ -8,7 +8,7 @@ sidebar_position: 5
 The public integration surface. Five routes, no authentication, JSON in and out. Keys are camelCase everywhere except [`/api/v1/chains`](#get-apiv1chains), which is snake_case.
 
 ```bash
-export RECOIL_API=https://recoil-aggregator-675174162902.us-central1.run.app
+export RECOIL_API=https://api.recoilpay.com
 ```
 
 | Method | Path | Purpose |
@@ -30,8 +30,8 @@ The aggregator serves its own OpenAPI spec and an interactive Swagger UI:
 
 | What | Where | Use it for |
 |---|---|---|
-| **Swagger UI** | [`/swagger-ui`](https://recoil-aggregator-675174162902.us-central1.run.app/swagger-ui) | Exploring and calling the API from your browser |
-| **Raw spec** | [`/api-docs/openapi.json`](https://recoil-aggregator-675174162902.us-central1.run.app/api-docs/openapi.json) | OpenAPI 3.1 JSON — feed it to codegen |
+| **Swagger UI** | [`/swagger-ui`](https://api.recoilpay.com/swagger-ui) | Exploring and calling the API from your browser |
+| **Raw spec** | [`/api-docs/openapi.json`](https://api.recoilpay.com/api-docs/openapi.json) | OpenAPI 3.1 JSON — feed it to codegen |
 
 The spec is generated from the server's own types, so it can't drift from what the API accepts. Point your codegen at it and skip writing types by hand:
 

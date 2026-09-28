@@ -74,7 +74,7 @@ const config: Config = {
         // the rightmost item — Docusaurus lays right-positioned items out in
         // declaration order.
         {
-          href: 'https://recoil-aggregator-675174162902.us-central1.run.app/swagger-ui',
+          href: 'https://api.recoilpay.com/swagger-ui',
           label: 'Interactive API Reference',
           position: 'right',
           className: 'navbar-api-cta',
@@ -106,7 +106,7 @@ const config: Config = {
             { label: 'API reference', to: '/integrate/api-reference' },
             {
               label: 'API playground',
-              href: 'https://recoil-aggregator-675174162902.us-central1.run.app/swagger-ui',
+              href: 'https://api.recoilpay.com/swagger-ui',
             },
             { label: 'Run a solver', href: 'https://solver.recoilpay.com' },
           ],

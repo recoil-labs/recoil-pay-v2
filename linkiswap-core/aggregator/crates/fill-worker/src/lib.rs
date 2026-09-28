@@ -336,6 +336,44 @@ impl FillWorker {
 			self.broadcaster.clone(),
 		);
 
+		// ── Refuse an order whose signed deadline has already passed ────
+		//
+		// An order carries a fill deadline signed by the user. Once it is
+		// behind us the settlers reject every call, so `openFor` reverts,
+		// the attempt is recorded as a failure, the lease lapses and the
+		// worker claims the very same order again — for ever. Orders that
+		// sat through a deploy window burned their five attempts this way
+		// and left the dashboard showing swaps as stuck.
+		//
+		// Nothing about waiting can fix an expired signature, so fail it
+		// once, before spending a single RPC call on it.
+		let now_secs = std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.map(|d| d.as_secs())
+			.unwrap_or(0);
+		if u64::from(parsed.fill_deadline) <= now_secs {
+			let expired_for = now_secs.saturating_sub(u64::from(parsed.fill_deadline));
+			warn!(
+				order_id = %req.order_id,
+				fill_deadline = parsed.fill_deadline,
+				expired_for_secs = expired_for,
+				"order deadline already passed; failing without touching the chain"
+			);
+			self.report_status(
+				&req.order_id,
+				"failed",
+				Some("expired"),
+				None,
+				Some(&format!(
+					"fill deadline passed {expired_for}s ago; the user's signature is no longer valid"
+				)),
+			)
+			.await;
+			return Err(FillWorkerError::NotFillable(format!(
+				"fill deadline expired {expired_for}s ago"
+			)));
+		}
+
 		// ── Stage 1: escrow the user's input on the origin chain ────────
 		self.report_status(&req.order_id, "pending", Some("prepare"), None, None)
 			.await;
