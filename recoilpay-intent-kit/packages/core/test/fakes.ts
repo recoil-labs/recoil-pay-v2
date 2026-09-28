@@ -109,7 +109,7 @@ export function fakeAggregator(overrides: Partial<Aggregator> = {}) {
     }
     return json(404, { error: 'NOT_FOUND' });
   });
-  return { agg, api: createApiClient({ apiUrl: 'https://agg.test', fetch: fetch as unknown as typeof globalThis.fetch }) };
+  return { agg, fetch: fetch as unknown as typeof globalThis.fetch, api: createApiClient({ apiUrl: 'https://agg.test', fetch: fetch as unknown as typeof globalThis.fetch }) };
 }
 
 export function order(id: string, status: OrderResponse['status'], fill?: string): OrderResponse {

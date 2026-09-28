@@ -1,0 +1,222 @@
+/*
+ * Widget chrome around <RecoilIntent />: the host element, the connected-
+ * account row and the wallet picker. Lives inside the shadow root, so none
+ * of it can reach the host page.
+ */
+
+:host {
+  display: block;
+  max-width: 640px;
+}
+
+:host([hidden]) {
+  display: none;
+}
+
+/* Same palette as .rp-root, set one level up so the picker (outside
+   .rp-root) shares it and the theme attributes reach both. */
+.rpw {
+  --rp-surface: #1c1e2e;
+  --rp-raised: #232536;
+  --rp-sunken: #161826;
+  --rp-ink: #e9e9ed;
+  --rp-ink-2: #b4b5c4;
+  --rp-muted: #8b8c9c;
+  --rp-line: #2a2c3d;
+  --rp-accent: #9184d9;
+  --rp-accent-text: #161826;
+  --rp-danger: #e06b6b;
+  --rp-success: #3fb98f;
+  --rp-radius: 12px;
+  font-family: inherit;
+}
+
+.rpw[data-mode='light'] {
+  --rp-surface: #ffffff;
+  --rp-raised: #f6f6f9;
+  --rp-sunken: #f0f0f4;
+  --rp-ink: #1c1e2e;
+  --rp-ink-2: #474a5c;
+  --rp-muted: #6b6d7e;
+  --rp-line: #e2e2ea;
+  --rp-accent: #6d5fd0;
+  --rp-accent-text: #ffffff;
+  --rp-danger: #c24545;
+  --rp-success: #1f8a64;
+}
+
+.rpw *,
+.rpw *::before,
+.rpw *::after {
+  box-sizing: border-box;
+}
+
+/* ── Account row ──────────────────────────────────────────────────────── */
+
+.rpw-account {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--rp-muted);
+  font-size: 12px;
+}
+
+.rpw-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--rp-success);
+}
+
+.rpw-address {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--rp-ink-2);
+}
+
+.rpw-text-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--rp-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rpw-text-button:hover {
+  color: var(--rp-accent);
+}
+
+/* ── Wallet picker ────────────────────────────────────────────────────── */
+
+.rpw-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(10, 11, 18, 0.6);
+}
+
+.rpw-picker {
+  width: min(100%, 360px);
+  overflow: hidden;
+  border: 1px solid var(--rp-line);
+  border-radius: var(--rp-radius);
+  background: var(--rp-surface);
+  color: var(--rp-ink);
+  font-size: 14px;
+  outline: none;
+}
+
+.rpw-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--rp-line);
+  font-weight: 600;
+}
+
+.rpw-close {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--rp-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.rpw-close:hover {
+  color: var(--rp-ink);
+}
+
+.rpw-wallets {
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+}
+
+.rpw-wallets button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: calc(var(--rp-radius) * 0.66);
+  background: transparent;
+  color: var(--rp-ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rpw-wallets button:hover:not(:disabled) {
+  background: var(--rp-raised);
+}
+
+.rpw-wallets button:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.rpw-wallets img,
+.rpw-icon-fallback {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
+.rpw-icon-fallback {
+  background: var(--rp-raised);
+  border: 1px solid var(--rp-line);
+}
+
+.rpw-icon-wc {
+  background: #3b99fc;
+  border-color: #3b99fc;
+}
+
+.rpw-status {
+  margin-left: auto;
+  color: var(--rp-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.rpw-empty,
+.rpw-error {
+  margin: 0;
+  padding: 0 16px 16px;
+  font-size: 13px;
+  color: var(--rp-ink-2);
+}
+
+.rpw-empty a {
+  color: var(--rp-accent);
+}
+
+.rpw-error {
+  color: var(--rp-danger);
+  overflow-wrap: anywhere;
+}
+
+.rpw :focus-visible {
+  outline: 2px solid var(--rp-accent);
+  outline-offset: 2px;
+}
+
+/* The dialog takes focus programmatically so keyboard users land in it;
+   a ring around the whole panel would add nothing. */
+.rpw .rpw-picker:focus-visible {
+  outline: none;
+}

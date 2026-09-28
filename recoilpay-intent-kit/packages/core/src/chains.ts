@@ -1,4 +1,5 @@
-import { createPublicClient, http, type PublicClient } from 'viem';
+import { createClient, http, type PublicClient } from 'viem';
+import { readContract, waitForTransactionReceipt } from 'viem/actions';
 import type { ChainInfo } from './api';
 
 /** Display names; the aggregator's /chains returns slugs ("polygon-amoy"). */
@@ -59,8 +60,14 @@ export function rpcReaders(chains: () => Promise<ChainInfo[]>) {
     if (hit) return hit;
     const info = (await chains()).find((c) => c.chain_id === chainId);
     if (!info?.rpc_url) return null;
-    const client = createPublicClient({ transport: http(info.rpc_url) }) as unknown as ChainReader;
-    cache.set(chainId, client);
-    return client;
+    // A bare client plus the two actions used, rather than createPublicClient,
+    // which attaches every public action and defeats tree-shaking.
+    const client = createClient({ transport: http(info.rpc_url) });
+    const reader = {
+      readContract: (args) => readContract(client, args),
+      waitForTransactionReceipt: (args) => waitForTransactionReceipt(client, args),
+    } as ChainReader;
+    cache.set(chainId, reader);
+    return reader;
   };
 }
