@@ -8,8 +8,12 @@ import { wagmiConfig } from './config';
 import { ConnectionProvider, WalletProvider as SolanaWalletProvider } from '@solana/wallet-adapter-react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import {
+  CoinbaseWalletAdapter,
+  LedgerWalletAdapter,
+  MathWalletAdapter,
   PhantomWalletAdapter,
   SolflareWalletAdapter,
+  TokenPocketWalletAdapter,
   TrustWalletAdapter,
 } from '@solana/wallet-adapter-wallets';
 import '@solana/wallet-adapter-react-ui/styles.css';
@@ -44,9 +48,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const endpoint = SOLANA_NETWORKS[SOLANA_DEVNET_CHAIN_ID].rpcUrl;
   const wallets = useMemo(
     () => [
+      // Wallets that still need an explicit adapter. Backpack and other
+      // Wallet Standard wallets are NOT listed on purpose: wallet-adapter
+      // discovers anything that registers itself, so naming them here
+      // would produce a duplicate entry in the picker.
       new PhantomWalletAdapter(),
       new SolflareWalletAdapter(),
       new TrustWalletAdapter(),
+      new CoinbaseWalletAdapter(),
+      new LedgerWalletAdapter(),
+      new MathWalletAdapter(),
+      new TokenPocketWalletAdapter(),
     ],
     []
   );
