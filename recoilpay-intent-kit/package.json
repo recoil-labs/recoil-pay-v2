@@ -7,6 +7,12 @@
   "scripts": {
     "build": "npm run build --workspaces",
     "test": "npm test --workspaces",
-    "typecheck": "npm run typecheck --workspaces"
+    "typecheck": "npm run typecheck --workspaces",
+    "changeset": "changeset",
+    "version-packages": "changeset version && npm install --package-lock-only",
+    "release": "npm run build && changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.31.1"
   }
 }

@@ -2,7 +2,18 @@
   "name": "@recoilpay/intent-react",
   "version": "0.1.0",
   "description": "Drop-in React component for RecoilPay intents: type a swap or send in plain English, quote across solvers, confirm, track.",
+  "keywords": [
+    "recoilpay",
+    "intents",
+    "cross-chain",
+    "swap",
+    "react",
+    "component",
+    "wagmi"
+  ],
+  "homepage": "https://docs.recoilpay.com/integrate/react",
   "license": "MIT",
+  "author": "Recoil Labs",
   "type": "module",
   "sideEffects": [
     "*.css"
@@ -12,27 +23,51 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./wagmi": {
-      "types": "./dist/wagmi.d.ts",
-      "import": "./dist/wagmi.js",
-      "require": "./dist/wagmi.cjs"
+      "import": {
+        "types": "./dist/wagmi.d.ts",
+        "default": "./dist/wagmi.js"
+      },
+      "require": {
+        "types": "./dist/wagmi.d.cts",
+        "default": "./dist/wagmi.cjs"
+      }
     },
-    "./styles.css": "./dist/styles.css"
+    "./styles.css": "./dist/styles.css",
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "wagmi": [
+        "./dist/wagmi.d.ts"
+      ]
+    }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "tsup src/index.ts src/wagmi.ts --format esm,cjs --dts --clean --external react --external wagmi && cp src/styles.css dist/styles.css",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@recoilpay/intent-core": "0.1.0"
+    "@recoilpay/intent-core": "^0.1.0"
   },
   "peerDependencies": {
     "react": ">=18",
@@ -58,5 +93,8 @@
     "viem": "^2.56.9",
     "vitest": "^5.0.2",
     "wagmi": "^2.19.5"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

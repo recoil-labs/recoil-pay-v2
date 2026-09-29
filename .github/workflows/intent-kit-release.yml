@@ -1,0 +1,53 @@
+# Releases the @recoilpay intent packages with Changesets.
+#
+# On every push to main that touches the kit:
+#   - pending changesets  → opens or updates a "Version Packages" PR
+#   - no pending changesets (e.g. that PR was just merged)
+#                         → publishes any version not yet on npm
+#
+# Needs the NPM_TOKEN repository secret (an npm automation or granular
+# token with publish rights on @recoilpay). See recoilpay-intent-kit/RELEASING.md.
+name: intent-kit release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'recoilpay-intent-kit/**'
+  workflow_dispatch:
+
+concurrency:
+  group: intent-kit-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: recoilpay-intent-kit/package-lock.json
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+        working-directory: recoilpay-intent-kit
+      # Never publish something that doesn't pass.
+      - run: npm run typecheck && npm test
+        working-directory: recoilpay-intent-kit
+      - uses: changesets/action@v1
+        with:
+          cwd: recoilpay-intent-kit
+          version: npm run version-packages
+          publish: npm run release
+          title: 'chore(intent-kit): version packages'
+          commit: 'chore(intent-kit): version packages'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

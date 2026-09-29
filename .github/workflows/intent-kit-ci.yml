@@ -1,0 +1,35 @@
+# Typecheck, test and build the @recoilpay intent packages.
+# Scoped to recoilpay-intent-kit/: the rest of the monorepo is untouched.
+name: intent-kit CI
+
+on:
+  pull_request:
+    paths:
+      - 'recoilpay-intent-kit/**'
+      - '.github/workflows/intent-kit-*.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'recoilpay-intent-kit/**'
+
+concurrency:
+  group: intent-kit-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: recoilpay-intent-kit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: recoilpay-intent-kit/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

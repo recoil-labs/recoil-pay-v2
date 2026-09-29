@@ -17,7 +17,9 @@ export default defineConfig({
   splitting: true,
   minify: true,
   clean: true,
-  sourcemap: true,
+  // No sourcemaps: they're ~70% of the published package, almost all of it
+  // for bundled third-party code (WalletConnect), and CDN users never load them.
+  sourcemap: false,
   noExternal: [/.*/],
   loader: { '.css': 'text' },
   define: { 'process.env.NODE_ENV': '"production"', global: 'globalThis' },
