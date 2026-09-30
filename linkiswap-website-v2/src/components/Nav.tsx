@@ -8,7 +8,7 @@ import WalletButton from './WalletButton';
 import { LANGUAGES } from '../i18n';
 import { cn, springConfig } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
-import { TAGS_URL } from '@/lib/links';
+import { DOCS_URL, TAGS_URL } from '@/lib/links';
 
 export default function Nav() {
   const { t, i18n } = useTranslation();
@@ -53,7 +53,7 @@ export default function Nav() {
     { label: t('nav.how'), href: '#how' },
     { label: t('nav.marketplace', 'Solvers'), href: '#marketplace' },
     { label: t('nav.networks', 'Networks'), href: '#networks' },
-    { label: t('nav.developers', 'Developers'), href: '#developers' },
+    { label: t('nav.docs', 'Docs'), href: DOCS_URL, external: true },
     { label: t('nav.solverPortal', 'Become a solver'), href: 'https://solver.recoilpay.com', external: true },
     { label: t('nav.tags', 'Tags'), href: TAGS_URL, external: true, badge: t('nav.new', 'new') },
   ];
