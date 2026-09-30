@@ -134,7 +134,7 @@ export default function Hero() {
               />
             )}
           </span>{' '}
-          {t('hero.tail', 'and it handles the rest.')}
+          {t('hero.tail', 'and it handles the rest')}
         </h1>
 
         <p

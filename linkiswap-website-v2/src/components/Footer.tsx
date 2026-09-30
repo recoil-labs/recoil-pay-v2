@@ -61,6 +61,8 @@ export default function Footer() {
 
           <span className="font-sans text-[13px] text-text-muted">
             {t('footer.copyright')}
+            <span aria-hidden="true" className="mx-2 opacity-50">·</span>
+            {t('footer.builtBy', 'Built by Recoil Labs')}
           </span>
         </div>
       </div>
