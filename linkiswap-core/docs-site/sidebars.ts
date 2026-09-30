@@ -21,6 +21,12 @@ const sidebars: SidebarsConfig = {
     'integrate/intents',
     'integrate/signing',
     'integrate/api-reference',
+    {
+      type: 'category',
+      label: 'Drop-in UI',
+      link: { type: 'doc', id: 'integrate/drop-in-ui' },
+      items: ['integrate/widget', 'integrate/react', 'integrate/sdk'],
+    },
     'integrate/going-live',
   ],
 };

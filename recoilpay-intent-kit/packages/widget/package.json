@@ -1,0 +1,55 @@
+{
+  "name": "@recoilpay/intent-widget",
+  "version": "0.1.0",
+  "description": "RecoilPay intents for any website: one script tag, a <recoilpay-intent> element, wallet connection included.",
+  "keywords": [
+    "recoilpay",
+    "intents",
+    "cross-chain",
+    "swap",
+    "widget",
+    "web-component",
+    "embed"
+  ],
+  "homepage": "https://docs.recoilpay.com/integrate/widget",
+  "license": "MIT",
+  "author": "Recoil Labs",
+  "type": "module",
+  "main": "./dist/recoilpay-intent-widget.js",
+  "module": "./dist/recoilpay-intent-widget.js",
+  "unpkg": "./dist/recoilpay-intent-widget.js",
+  "jsdelivr": "./dist/recoilpay-intent-widget.js",
+  "exports": {
+    ".": "./dist/recoilpay-intent-widget.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@recoilpay/intent-core": "^0.1.0",
+    "@recoilpay/intent-react": "^0.1.0",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@walletconnect/ethereum-provider": "~2.21.1",
+    "jsdom": "^29.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "viem": "^2.21.0",
+    "vitest": "^5.0.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

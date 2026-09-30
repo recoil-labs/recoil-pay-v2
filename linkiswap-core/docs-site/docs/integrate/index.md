@@ -10,7 +10,7 @@ You have a wallet, an app, a checkout, or an agent. Your users want to move valu
 
 Forward the intent to RecoilPay instead. We put it in front of a competing network of solvers, hand you back a signable order, and settle it.
 
-This section is for the people building that integration. It assumes you're comfortable with HTTP and EIP-712 signatures. It does **not** assume you know anything about the Open Intents Framework.
+This section is for the people building that integration. The API guides assume you're comfortable with HTTP and EIP-712 signatures, but not that you know anything about the Open Intents Framework. If you [drop in our UI](./drop-in-ui), you need neither.
 
 :::info Testnet today
 RecoilPay runs on public **testnets**. The API below is live and complete, but it moves play money. Read [Going to production](./going-live) before you plan a launch.
@@ -20,7 +20,7 @@ RecoilPay runs on public **testnets**. The API below is live and complete, but i
 
 ## What you get
 
-- **One HTTP surface.** Four public routes. No SDK, no API key, no onboarding call to get started.
+- **One HTTP surface.** A handful of public routes. No API key, no onboarding call to get started, and a [drop-in UI](./drop-in-ui) if you'd rather not build one.
 - **Competing quotes.** We fan your intent out to every registered solver in parallel and return all of the quotes, ranked. You pick, or you take the first.
 - **Solver-paid destination gas.** The solver delivers on the destination chain from its own inventory. Your user pays gas on the source chain only.
 - **Non-custodial throughout.** Funds move on your user's signature. RecoilPay never takes custody, and neither do you.
@@ -45,23 +45,29 @@ Everything else — solver discovery, route-finding, escrow, settlement, oracle 
 
 ---
 
-## Two ways to integrate
+## Three ways to integrate
 
-### 1. Forward structured intents (the API)
+### 1. Drop in our UI
 
-You build the UI. You decide what the user sees. You call `/api/v1/quotes` with a structured intent, get the user's signature, and submit. This is what the rest of this section documents, and it's what [v2.recoilpay.com](https://v2.recoilpay.com) itself does — the app is a client of the same public API you'd use.
+Add the RecoilPay intent experience to your product as it is: plain-English input, the best solver quote, confirm, and settlement tracking. Use the **[widget](./widget)**, one script tag for any website with wallet connection included, or the **[React component](./react)**, which plugs into the wallet setup your app already has.
 
-Right for: wallets, exchanges, payment flows, treasury tools, agents.
+Right for: getting to market fast, and any product where the swap isn't the thing you differentiate on.
 
-### 2. Forward natural language (your layer)
+**→ [Drop-in UI](./drop-in-ui)**
 
-The plain-English bar on [v2.recoilpay.com](https://v2.recoilpay.com) — `swap 10 USDC on OP Sepolia for USDC on Base Sepolia` — is **client-side**. The parser runs in the browser and emits the structured intent described in [The intent object](./intents). There is no server endpoint that accepts a sentence today.
+### 2. Your UI, our flow
 
-So if you want a natural-language surface, you own the parsing and call the same structured API underneath. The grammar that the RecoilPay app recognises is documented in [Writing intents](../writing-intents) if you want to match its behaviour.
+Build every pixel yourself on the **[headless SDK](./sdk)**. It handles parsing, validation, quoting, Permit2 approval, signing, submission and tracking, and gives you the state to render.
 
-:::tip If a hosted parse endpoint would unblock you
-That's useful signal and it's a small piece of work on our side. [Talk to us](./going-live#talk-to-us) — tell us the shape you'd want.
-:::
+Right for: custom designs, and apps not built with React.
+
+### 3. Call the API directly
+
+Call `/api/v1/quotes` with a structured intent, get the user's signature and submit it. The rest of this section documents this path, and it's what [v2.recoilpay.com](https://v2.recoilpay.com) itself does: the app is a client of the same public API you'd use.
+
+Want a natural-language input on top? The RecoilPay app turns what a user types into structured intents with a language model called from the browser, and the [headless SDK](./sdk#building-blocks) exports that same parser (`parseIntent`) for your own Hugging Face token. There's no server endpoint that accepts a sentence. The phrasing it understands is described in [Writing intents](../writing-intents).
+
+Right for: wallets, exchanges, payment flows, treasury tools, agents, and backends.
 
 ---
 
@@ -103,6 +109,7 @@ Partner API keys are on the roadmap, and they're what will carry attribution and
 
 | I want to… | Go to |
 |---|---|
+| Add the swap UI without building it | [Drop-in UI](./drop-in-ui) |
 | See the whole loop working, today | [Forward your first intent](./quickstart) |
 | Understand the intent JSON and address encoding | [The intent object](./intents) |
 | Get the signature right | [Signing and submitting](./signing) |
