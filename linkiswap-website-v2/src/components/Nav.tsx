@@ -54,7 +54,7 @@ export default function Nav() {
     { label: t('nav.marketplace', 'Solvers'), href: '#marketplace' },
     { label: t('nav.networks', 'Networks'), href: '#networks' },
     { label: t('nav.developers', 'Developers'), href: '#developers' },
-    { label: t('nav.solverPortal', 'Run a solver'), href: 'https://solver.recoilpay.com', external: true },
+    { label: t('nav.solverPortal', 'Become a solver'), href: 'https://solver.recoilpay.com', external: true },
     { label: t('nav.tags', 'Tags'), href: TAGS_URL, external: true, badge: t('nav.new', 'new') },
   ];
 

@@ -17,7 +17,7 @@
     "currentNetwork": "Switch network, current: {{network}}",
     "openWallet": "Account {{account}}, open wallet",
     "networks": "Networks",
-    "solverPortal": "Run a solver"
+    "solverPortal": "Become a solver"
   },
   "hero": {
     "subtitle": "Type what you want in plain English. Solvers compete to route it across chains — no bridges to babysit, no gas to juggle.",
@@ -130,7 +130,7 @@
     "winner": "✓ Best Execution Wins",
     "routeNote": "Best route, chosen by solvers",
     "solversNote": "●●● 3 solvers competing",
-    "runSolver": "Run a solver",
+    "runSolver": "Become a solver",
     "unavailable": "Solver registry unavailable right now.",
     "none": "No solvers registered yet."
   },
