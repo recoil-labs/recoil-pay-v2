@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import { Code2, ExternalLink, Radio, Send, Sparkles, type LucideIcon } from 'lucide-react';
+import { AtSign, BookOpen, Code2, ExternalLink, Package, Radio, Send, Sparkles, type LucideIcon } from 'lucide-react';
+import { DOCS_URL, NPM_URL, TAGS_URL } from '@/lib/links';
 import Logo from './Logo';
 
 interface FooterLink {
@@ -12,9 +13,15 @@ interface FooterLink {
 const LINKS: FooterLink[] = [
   { key: 'app', href: '#', external: false, icon: Sparkles },
   { key: 'solvers', href: '#marketplace', external: false, icon: Radio },
+  { key: 'tags', href: TAGS_URL, external: true, icon: AtSign },
+  { key: 'docs', href: DOCS_URL, external: true, icon: BookOpen },
+  { key: 'npm', href: NPM_URL, external: true, icon: Package },
   { key: 'twitter', href: 'https://x.com/RecoilPay', external: true, icon: Send },
   { key: 'github', href: '#', external: false, icon: Code2 },
 ];
+
+// Defaults for labels not yet in every locale file.
+const LINK_LABELS: Record<string, string> = { tags: 'Tags', docs: 'Docs', npm: 'npm packages' };
 
 export default function Footer() {
   const { t } = useTranslation();
@@ -46,7 +53,7 @@ export default function Footer() {
                 className="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-surface-input px-3.5 py-2 font-sans text-[13px] font-semibold text-text-secondary no-underline transition-[border-color,color,transform] duration-200 hover:-translate-y-0.5 hover:border-border-cyan hover:text-accent-cyan"
               >
                 <Icon size={14} aria-hidden="true" />
-                {t(`footer.links.${key}`)}
+                {t(`footer.links.${key}`, LINK_LABELS[key] ?? key)}
                 {external && <ExternalLink size={12} aria-hidden="true" />}
               </a>
             ))}

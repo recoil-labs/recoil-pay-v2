@@ -148,12 +148,23 @@ export default function IntentBar() {
           <span className="font-mono text-[11px] text-text-muted" style={{ letterSpacing: 'var(--tracking-ui)' }}>
             <span className="opacity-50">/</span>intent
           </span>
-          {activeCount !== null && activeCount > 0 && (
-            <span className="flex items-center gap-1.5 font-sans text-[11px] text-text-secondary" style={{ letterSpacing: 'var(--tracking-ui)' }}>
-              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: '#3fb98f' }} />
-              {activeCount} solver{activeCount === 1 ? '' : 's'} listening
-            </span>
-          )}
+          <span className="flex items-center gap-3">
+            {activeCount !== null && activeCount > 0 && (
+              <span className="flex items-center gap-1.5 font-sans text-[11px] text-text-secondary" style={{ letterSpacing: 'var(--tracking-ui)' }}>
+                <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: '#3fb98f' }} />
+                {activeCount} solver{activeCount === 1 ? '' : 's'} listening
+              </span>
+            )}
+            {/* This bar ships as a package; the people most likely to want
+                it are the ones using it right now. */}
+            <a
+              href="#developers"
+              className="font-mono text-[11px] text-text-muted no-underline transition-colors hover:text-primary"
+              style={{ letterSpacing: 'var(--tracking-ui)' }}
+            >
+              {t('intentBar.embed', 'embed this')} <span aria-hidden="true">→</span>
+            </a>
+          </span>
         </div>
         <div className="flex items-end gap-2 p-2">
           <Input

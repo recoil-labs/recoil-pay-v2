@@ -7,8 +7,8 @@ sidebar_label: Overview
 
 The RecoilPay app's intent experience, packaged for your product. Your user types what they want, like *swap 10 USDC on Base Sepolia for USDC on OP Sepolia*, sees the best solver quote, confirms in their wallet, and watches it settle. You don't build the parser, the quote card, the Permit2 approval, the signing or the order tracking.
 
-:::info Availability
-The packages are being published to npm under `@recoilpay`. Until they are, [talk to us](./going-live#talk-to-us) for early access.
+:::info On npm
+All three packages are published under the [`@recoilpay`](https://www.npmjs.com/org/recoilpay) organization: [`@recoilpay/intent-widget`](https://www.npmjs.com/package/@recoilpay/intent-widget), [`@recoilpay/intent-react`](https://www.npmjs.com/package/@recoilpay/intent-react) and [`@recoilpay/intent-core`](https://www.npmjs.com/package/@recoilpay/intent-core). They're released together and always share one version number.
 :::
 
 ---

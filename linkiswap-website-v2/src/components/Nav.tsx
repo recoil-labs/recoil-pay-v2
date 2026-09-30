@@ -8,6 +8,7 @@ import WalletButton from './WalletButton';
 import { LANGUAGES } from '../i18n';
 import { cn, springConfig } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { TAGS_URL } from '@/lib/links';
 
 export default function Nav() {
   const { t, i18n } = useTranslation();
@@ -48,13 +49,21 @@ export default function Nav() {
   // Only sections that still exist, plus the one external destination that
   // is real: the solver operator portal. Blog and docs pointed at hosts that
   // died with the old brand's Render workspace.
-  const navLinks = [
+  const navLinks: { label: string; href: string; external?: boolean; badge?: string }[] = [
     { label: t('nav.how'), href: '#how' },
     { label: t('nav.marketplace', 'Solvers'), href: '#marketplace' },
     { label: t('nav.networks', 'Networks'), href: '#networks' },
     { label: t('nav.developers', 'Developers'), href: '#developers' },
     { label: t('nav.solverPortal', 'Run a solver'), href: 'https://solver.recoilpay.com', external: true },
+    { label: t('nav.tags', 'Tags'), href: TAGS_URL, external: true, badge: t('nav.new', 'new') },
   ];
+
+  const badgeEl = (badge?: string) =>
+    badge ? (
+      <span className="ms-1.5 rounded-full bg-primary-dim px-1.5 py-px align-middle font-mono text-[9px] font-semibold uppercase text-primary">
+        {badge}
+      </span>
+    ) : null;
 
   return (
     <nav className="sticky top-0 z-50 border-b border-header-border bg-header-bg backdrop-blur-xl [backdrop-filter:blur(20px)_saturate(180%)] transition-colors duration-200">
@@ -64,7 +73,7 @@ export default function Nav() {
         </a>
 
         <div className="hidden items-center rounded-full border border-border-subtle bg-surface-glass px-1.5 py-1 shadow-[0_18px_56px_-34px_var(--shadow-color)] backdrop-blur-xl min-[901px]:flex">
-          {navLinks.map(({ label, href, external }) => (
+          {navLinks.map(({ label, href, external, badge }) => (
             <a
               key={href}
               href={href}
@@ -72,6 +81,7 @@ export default function Nav() {
               className="rounded-full px-4 py-2 font-sans text-[13px] font-semibold text-text-secondary no-underline transition-[background,color,transform] duration-200 hover:-translate-y-px hover:bg-surface-hover hover:text-app-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan/70"
             >
               {label}
+              {badgeEl(badge)}
             </a>
           ))}
         </div>
@@ -168,7 +178,7 @@ export default function Nav() {
             className="border-t border-border-subtle bg-surface-glass-strong px-5 pb-5 pt-2 shadow-[0_24px_70px_-44px_var(--shadow-color)] backdrop-blur-2xl min-[901px]:hidden"
           >
             <div className="mx-auto flex max-w-[1320px] flex-col gap-2">
-              {navLinks.map(({ label, href, external }) => (
+              {navLinks.map(({ label, href, external, badge }) => (
                 <a
                   key={href}
                   href={href}
@@ -177,6 +187,7 @@ export default function Nav() {
                   className="rounded-xl border border-transparent px-3 py-3 font-sans text-base font-semibold text-app-text no-underline transition-colors duration-200 hover:border-border-cyan hover:bg-surface-hover"
                 >
                   {label}
+                  {badgeEl(badge)}
                 </a>
               ))}
 
