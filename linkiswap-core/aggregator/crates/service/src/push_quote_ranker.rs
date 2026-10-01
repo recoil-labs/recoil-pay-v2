@@ -1040,4 +1040,92 @@ mod tests {
 		assert_ne!(json["integrityChecksum"], "temp");
 		assert!(!json["integrityChecksum"].as_str().unwrap().is_empty());
 	}
+
+	/// BSC testnet (97) uses the canonical settlers and a 1-byte ERC-7930
+	/// chain reference; a quote pushed in either direction must shape.
+	#[tokio::test]
+	async fn shape_builds_bsc_testnet_payloads_in_both_directions() {
+		const BSC_USDC: &str = "0x67bF9ba31f64de698EfD23c2CB0208191A5C2A9e";
+		const BASE_USDC: &str = "0x73c83DAcc74bB8a704717AC09703b959E74b9705";
+		let ranker = PushQuoteRanker::new(
+			Arc::new(oif_storage::MemoryStore::new()),
+			Arc::new(crate::integrity::IntegrityService::new(
+				oif_types::SecretString::from("push-quote-ranker-test-secret-0123456789"),
+			)),
+			Arc::new(ChainRegistry::testnet_default()),
+		);
+		let scored = |from: u64, to: u64, from_asset: &str, to_asset: &str| ScoredQuote {
+			solver_quote: SolverQuote {
+				id: format!("q-{from}-{to}"),
+				solver_id: "solver-abc".into(),
+				from_chain: format!("eip155:{from}"),
+				to_chain: format!("eip155:{to}"),
+				from_asset: from_asset.into(),
+				to_asset: to_asset.into(),
+				from_decimals: 6,
+				to_decimals: 6,
+				quote: "0.99".into(),
+				min_amount: "0".into(),
+				max_amount: "999999999999".into(),
+				fixed_cost: None,
+				expiry: "2099-01-01T00:00:00Z".into(),
+				exclusive_for: None,
+				paused: false,
+				created_at: Utc::now(),
+				updated_at: Utc::now(),
+			},
+			output_amount_base_units: 990_000,
+			output_usd: 1.0,
+			output_usd_norm: 1.0,
+			reputation: 0.5,
+			success_rate: 1.0,
+			latency_norm: 1.0,
+			composite_score: 0.9,
+			reasons: Vec::new(),
+		};
+		let user = "0xF748bF5188579Ded99e0365Cd83c6376eaA5c310";
+		let shape = |s: ScoredQuote| {
+			let ranker = &ranker;
+			async move {
+				let quote = ranker.shape(&s, user, 1_000_000).await.expect("shape should produce a quote");
+				serde_json::to_value(QuoteResponse::try_from(quote).unwrap()).unwrap()
+			}
+		};
+
+		// BSC testnet → Base Sepolia: signed on BSC, escrowed in the
+		// canonical InputSettler, checked by the BSC AlwaysYesOracle.
+		let json = shape(scored(97, 84532, BSC_USDC, BASE_USDC)).await;
+		let payload = &json["order"]["payload"];
+		assert_eq!(payload["domain"]["chainId"], 97);
+		let msg = &payload["message"];
+		assert_eq!(msg["permitted"][0]["token"], BSC_USDC);
+		assert_eq!(msg["spender"], "0x1CC9260E285C2C8AC8D2E7102F3978056Ec1d0a8");
+		assert_eq!(
+			msg["witness"]["inputOracle"],
+			"0xd31b6A3b46Bfd45AA629E8739ff35C032d2AE622"
+		);
+		assert_eq!(msg["witness"]["outputs"][0]["chainId"], 84532);
+		assert!(json["preview"]["inputs"][0]["asset"]
+			.as_str()
+			.unwrap()
+			.starts_with("0x00010000016114"));
+
+		// Base Sepolia → BSC testnet: filled through the canonical
+		// OutputSettler on BSC.
+		let json = shape(scored(84532, 97, BASE_USDC, BSC_USDC)).await;
+		let out = &json["order"]["payload"]["message"]["witness"]["outputs"][0];
+		assert_eq!(out["chainId"], 97);
+		assert_eq!(
+			out["settler"],
+			"0x00000000000000000000000052602d7cc3d833f5d28ee6d01c7f82c9b2322e10"
+		);
+		assert_eq!(
+			out["token"],
+			"0x00000000000000000000000067bf9ba31f64de698efd23c2cb0208191a5c2a9e"
+		);
+		assert!(json["preview"]["outputs"][0]["asset"]
+			.as_str()
+			.unwrap()
+			.starts_with("0x00010000016114"));
+	}
 }
