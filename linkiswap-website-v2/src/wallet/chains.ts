@@ -11,6 +11,7 @@ import {
   optimismSepolia,
   arbitrumSepolia,
   polygonAmoy,
+  bscTestnet,
 } from 'wagmi/chains';
 
 /**
@@ -31,12 +32,13 @@ export const CHAINS = [
   polygon,
   bsc,
   avalanche,
-  // ── Testnets (the solver settles across these five) ──
+  // ── Testnets (the solver settles across these) ──
   baseSepolia,
   optimismSepolia,
   arbitrumSepolia,
   sepolia,
   polygonAmoy,
+  bscTestnet,
 ] as const;
 
 /**
@@ -49,6 +51,7 @@ export const OIF_LIVE_CHAIN_IDS = [
   sepolia.id,
   arbitrumSepolia.id,
   polygonAmoy.id,
+  bscTestnet.id,
 ] as const;
 
 export const isTestnetChain = (chainId: number): boolean =>

@@ -25,6 +25,8 @@ const BRAND: Record<string, Brand> = {
   Arbitrum:  { color: '#12AAFF', logo: 'https://cryptologos.cc/logos/arbitrum-arb-logo.svg' },
   Optimism:  { color: '#FF0420', logo: 'https://cdn.simpleicons.org/optimism/FF0420' },
   Polygon:   { color: '#8247E5', logo: 'https://cdn.simpleicons.org/polygon/8247E5' },
+  'BNB Chain': { color: '#F0B90B', logo: 'https://cdn.simpleicons.org/bnbchain/F0B90B' },
+  opBNB:     { color: '#F0B90B', logo: 'https://cdn.simpleicons.org/bnbchain/F0B90B' },
   Solana:    { color: '#14F195', logo: 'https://cdn.simpleicons.org/solana/14F195' },
 };
 

@@ -48,9 +48,14 @@ export const CHAIN_ALIASES: Record<string, CanonicalChain> = {
   op: { id: 10, name: 'Optimism' },
   polygon: { id: 137, name: 'Polygon' },
   matic: { id: 137, name: 'Polygon' },
+  bsc: { id: 56, name: 'BNB Chain' },
+  bnb: { id: 56, name: 'BNB Chain' },
+  'bnb chain': { id: 56, name: 'BNB Chain' },
+  'binance smart chain': { id: 56, name: 'BNB Chain' },
+  opbnb: { id: 204, name: 'opBNB' },
   solana: { id: 9000000002, name: 'Solana Devnet' },
   'sol network': { id: 9000000002, name: 'Solana Devnet' },
-  // testnets — the solver settles across these five
+  // testnets — the solver settles across these
   'base sepolia': { id: 84532, name: 'Base Sepolia' },
   'op sepolia': { id: 11155420, name: 'OP Sepolia' },
   'optimism sepolia': { id: 11155420, name: 'OP Sepolia' },
@@ -61,6 +66,8 @@ export const CHAIN_ALIASES: Record<string, CanonicalChain> = {
   sepolia: { id: 11155111, name: 'Ethereum Sepolia' },
   'polygon amoy': { id: 80002, name: 'Polygon Amoy' },
   amoy: { id: 80002, name: 'Polygon Amoy' },
+  'bsc testnet': { id: 97, name: 'BNB Chain Testnet' },
+  'bnb testnet': { id: 97, name: 'BNB Chain Testnet' },
 };
 
 export function normalizeToken(raw: string | null): string | null {

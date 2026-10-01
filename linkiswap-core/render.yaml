@@ -97,7 +97,7 @@ services:
       # origin chain, fill on the destination, finalise back on origin).
       # Required: with no RPCs the worker rejects every order.
       - key: CHAIN_RPCS
-        value: 11155420:https://sepolia.optimism.io,84532:https://sepolia.base.org,11155111:https://ethereum-sepolia-rpc.publicnode.com,80002:https://rpc-amoy.polygon.technology
+        value: 11155420:https://sepolia.optimism.io,84532:https://sepolia.base.org,11155111:https://ethereum-sepolia-rpc.publicnode.com,80002:https://rpc-amoy.polygon.technology,97:https://bsc-testnet-rpc.publicnode.com
       # The worker writes its bootstrap identity (a fresh secp256k1
       # keypair) to a JSON file on disk so it survives container
       # restarts. The default path `/var/lib/fill-worker` is root-owned,
