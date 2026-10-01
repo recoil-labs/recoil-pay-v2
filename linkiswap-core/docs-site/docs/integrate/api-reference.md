@@ -73,6 +73,8 @@ Chain registry: settlement contracts, Permit2 address, RPC endpoint, and tokens 
 }
 ```
 
+`decimals` is per token, per chain. It's 6 for USDC on every live testnet but 18 on BNB Chain mainnet, so scale amounts with this value rather than a constant.
+
 All public on-chain configuration. Sorted by `chain_id`.
 
 :::caution This endpoint is snake_case

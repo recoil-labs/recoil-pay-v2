@@ -27,6 +27,7 @@ swap <amount> <token> on <chain> for <token> on <chain>
 
 - `swap 10 USDC on OP Sepolia for USDC on Base Sepolia`
 - `swap 1 USDC on Polygon Amoy for USDC on Ethereum Sepolia`
+- `swap 5 USDC on BSC Testnet for USDC on Base Sepolia`
 - `swap 25 USDT on OP Sepolia for USDC on Base Sepolia`
 
 You can also write `to` instead of `for`:
@@ -84,8 +85,11 @@ The following all mean the same chain:
 | `base sepolia` | Base Sepolia |
 | `polygon amoy`, `amoy` | Polygon Amoy |
 | `ethereum sepolia`, `eth sepolia`, `sepolia` | Ethereum Sepolia |
+| `bsc testnet`, `bnb testnet` | BNB Chain Testnet |
 
 Case doesn't matter (`OP Sepolia` and `op sepolia` are the same).
+
+`bsc`, `bnb`, `bnb chain`, `binance smart chain` and `opbnb` on their own mean the BNB **mainnets**. They're recognised, but not swappable yet, so say `bsc testnet` for now.
 
 ### Tokens
 

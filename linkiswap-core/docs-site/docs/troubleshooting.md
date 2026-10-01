@@ -137,7 +137,7 @@ Your wallet might not know about the mock USDC token. Add it manually:
 
 1. In your wallet, find **Import token** (in MetaMask: **Assets** → **Import tokens** → **Custom token**).
 2. Paste the USDC address for your current chain (see [Supported networks → USDC contract addresses](./supported-networks#usdc-contract-addresses)).
-3. Symbol: `USDC`, decimals: `6`.
+3. Symbol: `USDC`, decimals: the value listed for your chain (`6` on every testnet today).
 
 The wallet should now show your balance.
 

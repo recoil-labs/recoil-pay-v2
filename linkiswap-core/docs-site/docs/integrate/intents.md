@@ -77,7 +77,7 @@ export function fromInteropAddress(interop: string): { chainId: number; address:
 }
 ```
 
-Pre-computed values for the four live testnets, if you want fixtures to test against:
+Pre-computed values for the five live testnets, if you want fixtures to test against:
 
 | Chain | Chain id | `chainRef` prefix |
 |---|---|---|
@@ -85,6 +85,13 @@ Pre-computed values for the four live testnets, if you want fixtures to test aga
 | Base Sepolia | `84532` | `0x0001000003014a3414…` |
 | Polygon Amoy | `80002` | `0x000100000301388214…` |
 | Ethereum Sepolia | `11155111` | `0x0001000003aa36a714…` |
+| BNB Chain Testnet | `97` | `0x00010000016114…` |
+
+The chain reference is **minimal** big-endian, so its length depends on the chain id: 3 bytes for the Sepolias and Amoy, but 1 byte for BNB Chain (`56` and `97`) and 2 for opBNB Testnet (`5611`). An encoder that pads every chain id to the same width works on the first four chains and silently gets zero quotes on BNB Chain. Include a short chain id in your tests — for example, USDC `0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d` on BNB Chain mainnet encodes to exactly:
+
+```
+0x000100000138148ac76a51cc950d9822d68b83fe1ad97b32cd580d
+```
 
 ---
 
@@ -92,12 +99,12 @@ Pre-computed values for the four live testnets, if you want fixtures to test aga
 
 **Base units, as a decimal string.** Not a number, not hex, not a decimal fraction.
 
-- USDC and USDT have 6 decimals → `1 USDC` is `"1000000"`
+- Decimals are **per token, per chain**. On every live testnet USDC and USDT have 6 → `1 USDC` is `"1000000"`. On BNB Chain **mainnet** they have 18 → `1 USDC` is `"1000000000000000000"`. Hardcoding 6 is off by a factor of 10¹² there.
 - Must be greater than zero; `"0"` is rejected at validation
 
 Use a string because amounts exceed IEEE-754 safe integers. `JSON.parse`-ing an amount into a JS `number` is a real bug waiting for a large-value transfer — keep it a string or a `bigint` end to end.
 
-Read decimals from `GET /api/v1/chains` or from the solver's `supportedAssets` rather than assuming 6.
+Always read decimals from `GET /api/v1/chains` or from the solver's `supportedAssets` rather than assuming 6.
 
 ---
 
