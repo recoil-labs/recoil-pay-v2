@@ -165,6 +165,15 @@ Testnet BNB faucet: https://www.bnbchain.org/en/testnet-faucet
 
 Record the oracle and USDC addresses — everything downstream needs them.
 
+### Deployed (BSC testnet, 97) — from `oif-contracts` @ `8e38b9bb`
+
+| Contract | Address | Notes |
+|---|---|---|
+| AlwaysYesOracle | `0xd31b6A3b46Bfd45AA629E8739ff35C032d2AE622` | runtime bytecode matches the pinned build |
+| MockERC20 "USD Coin" (USDC) | `0x67bF9ba31f64de698EfD23c2CB0208191A5C2A9e` | **6 decimals**; 1,000,000 minted to the solver |
+
+Solver `0x632BF0D0d6468908378C3ccfAC4E788B115e0E55` funded with 0.1 tBNB.
+
 ## Step 3 — Aggregator chain registry
 
 `linkiswap-core/aggregator/crates/config/src/chains.rs`
