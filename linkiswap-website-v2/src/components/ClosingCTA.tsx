@@ -54,7 +54,7 @@ export default function ClosingCTA() {
             className="inline-flex items-center gap-2 rounded-md border border-border px-6 py-3 font-sans text-sm text-app-text transition-colors hover:bg-surface-hover"
             style={{ letterSpacing: 'var(--tracking-ui)' }}
           >
-            {t('cta.secondary', 'Run a solver')}
+            {t('cta.secondary', 'Become a solver')}
             <ArrowUpRight size={15} aria-hidden="true" />
           </a>
         </div>

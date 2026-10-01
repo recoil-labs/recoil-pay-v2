@@ -1,4 +1,5 @@
 import Nav from './components/Nav';
+import TagsBanner from './components/TagsBanner';
 import Hero from './components/Hero';
 import Patterns from './components/Patterns';
 import HowItWorks from './components/HowItWorks';
@@ -16,6 +17,7 @@ import BackToTopButton from './components/BackToTopButton';
 export default function App() {
   return (
     <>
+      <TagsBanner />
       <Nav />
       <main className="overflow-hidden bg-app-bg text-app-text">
         <Hero />

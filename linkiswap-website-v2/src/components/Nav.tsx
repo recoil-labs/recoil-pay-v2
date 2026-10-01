@@ -8,6 +8,7 @@ import WalletButton from './WalletButton';
 import { LANGUAGES } from '../i18n';
 import { cn, springConfig } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { DOCS_URL, TAGS_URL } from '@/lib/links';
 
 export default function Nav() {
   const { t, i18n } = useTranslation();
@@ -48,14 +49,26 @@ export default function Nav() {
   // Only sections that still exist, plus the one external destination that
   // is real: the solver operator portal. Blog and docs pointed at hosts that
   // died with the old brand's Render workspace.
-  const navLinks = [
+  const navLinks: { label: string; href: string; external?: boolean; badge?: string }[] = [
     { label: t('nav.how'), href: '#how' },
     { label: t('nav.marketplace', 'Solvers'), href: '#marketplace' },
     { label: t('nav.networks', 'Networks'), href: '#networks' },
-    { label: t('nav.developers', 'Developers'), href: '#developers' },
-    { label: t('nav.solverPortal', 'Run a solver'), href: 'https://solver.recoilpay.com', external: true },
+    { label: t('nav.docsLink', 'Docs'), href: DOCS_URL, external: true },
+    { label: t('nav.solverPortal', 'Become a solver'), href: 'https://solver.recoilpay.com', external: true },
+    { label: t('nav.tags', 'Tags'), href: TAGS_URL, external: true, badge: t('nav.new', 'new') },
   ];
 
+  const badgeEl = (badge?: string) =>
+    badge ? (
+      <span className="ms-1.5 rounded-full bg-primary-dim px-1.5 py-px align-middle font-mono text-[9px] font-semibold uppercase text-primary">
+        {badge}
+      </span>
+    ) : null;
+
+  // The full bar (logo + links pill + language/theme/wallet) needs ~1205px
+  // on one line in English, more in longer languages or with a connected
+  // wallet, so it only appears from 1280px, with tighter link padding until
+  // 1440px so German, French and Swahili fit too. Below 1280px: menu button.
   return (
     <nav className="sticky top-0 z-50 border-b border-header-border bg-header-bg backdrop-blur-xl [backdrop-filter:blur(20px)_saturate(180%)] transition-colors duration-200">
       <div className="mx-auto flex max-w-[1320px] items-center justify-between gap-5 px-5 py-3.5 sm:px-8 lg:px-10">
@@ -63,20 +76,21 @@ export default function Nav() {
           <Logo height={23} />
         </a>
 
-        <div className="hidden items-center rounded-full border border-border-subtle bg-surface-glass px-1.5 py-1 shadow-[0_18px_56px_-34px_var(--shadow-color)] backdrop-blur-xl min-[901px]:flex">
-          {navLinks.map(({ label, href, external }) => (
+        <div className="hidden items-center rounded-full border border-border-subtle bg-surface-glass px-1.5 py-1 shadow-[0_18px_56px_-34px_var(--shadow-color)] backdrop-blur-xl min-[1280px]:flex">
+          {navLinks.map(({ label, href, external, badge }) => (
             <a
               key={href}
               href={href}
               {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-              className="rounded-full px-4 py-2 font-sans text-[13px] font-semibold text-text-secondary no-underline transition-[background,color,transform] duration-200 hover:-translate-y-px hover:bg-surface-hover hover:text-app-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan/70"
+              className="whitespace-nowrap rounded-full px-2.5 py-2 font-sans min-[1440px]:px-4 text-[13px] font-semibold text-text-secondary no-underline transition-[background,color,transform] duration-200 hover:-translate-y-px hover:bg-surface-hover hover:text-app-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan/70"
             >
               {label}
+              {badgeEl(badge)}
             </a>
           ))}
         </div>
 
-        <div className="hidden items-center gap-2.5 min-[901px]:flex">
+        <div className="hidden items-center gap-2.5 min-[1280px]:flex">
           <div ref={languageMenuRef} className="relative">
             <Button
               type="button"
@@ -150,7 +164,7 @@ export default function Nav() {
 
         <button
           type="button"
-          className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-border-subtle bg-surface-glass text-app-text shadow-[0_14px_34px_-28px_var(--shadow-color)] backdrop-blur-xl transition-colors duration-200 hover:border-border-cyan hover:text-accent-cyan min-[901px]:hidden"
+          className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-border-subtle bg-surface-glass text-app-text shadow-[0_14px_34px_-28px_var(--shadow-color)] backdrop-blur-xl transition-colors duration-200 hover:border-border-cyan hover:text-accent-cyan min-[1280px]:hidden"
           aria-label={menuOpen ? closeMenuLabel : openMenuLabel}
           onClick={() => setMenuOpen(open => !open)}
         >
@@ -165,10 +179,10 @@ export default function Nav() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={springConfig}
-            className="border-t border-border-subtle bg-surface-glass-strong px-5 pb-5 pt-2 shadow-[0_24px_70px_-44px_var(--shadow-color)] backdrop-blur-2xl min-[901px]:hidden"
+            className="border-t border-border-subtle bg-surface-glass-strong px-5 pb-5 pt-2 shadow-[0_24px_70px_-44px_var(--shadow-color)] backdrop-blur-2xl min-[1280px]:hidden"
           >
             <div className="mx-auto flex max-w-[1320px] flex-col gap-2">
-              {navLinks.map(({ label, href, external }) => (
+              {navLinks.map(({ label, href, external, badge }) => (
                 <a
                   key={href}
                   href={href}
@@ -177,6 +191,7 @@ export default function Nav() {
                   className="rounded-xl border border-transparent px-3 py-3 font-sans text-base font-semibold text-app-text no-underline transition-colors duration-200 hover:border-border-cyan hover:bg-surface-hover"
                 >
                   {label}
+                  {badgeEl(badge)}
                 </a>
               ))}
 

@@ -1,4 +1,5 @@
-import { Check, ExternalLink } from 'lucide-react';
+import { ArrowRight, AtSign, Check, ExternalLink } from 'lucide-react';
+import { TAGS_URL } from '@/lib/links';
 
 interface Props {
   action: 'swap' | 'send';
@@ -69,6 +70,25 @@ export default function SwapCompleteModal({
             Done
           </button>
         </div>
+
+        {/* The moment someone has just moved money is the moment a name
+            instead of a 0x address means most. Reservation only: sending
+            to a tag isn't live yet, so the copy says "next time". */}
+        <a
+          href={TAGS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 flex w-full items-center gap-3 rounded-xl border border-border-subtle bg-surface-input px-4 py-3 text-left no-underline transition-colors duration-200 hover:border-border-cyan"
+        >
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-dim text-primary">
+            <AtSign size={16} aria-hidden="true" />
+          </span>
+          <span className="min-w-0 flex-1 font-sans text-[13px] leading-[1.45] text-text-secondary">
+            Next time, send to a name, not an address.{' '}
+            <span className="font-semibold text-primary">Reserve your @tag</span>
+          </span>
+          <ArrowRight size={15} className="shrink-0 text-text-muted" aria-hidden="true" />
+        </a>
       </div>
     </div>
   );

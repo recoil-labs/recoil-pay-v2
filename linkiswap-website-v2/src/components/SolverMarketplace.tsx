@@ -90,7 +90,7 @@ export default function SolverMarketplace() {
             className="mt-8 inline-flex items-center gap-2 rounded-md border border-border px-4 py-2.5 font-sans text-sm text-app-text transition-colors hover:bg-surface-hover"
             style={{ letterSpacing: 'var(--tracking-ui)' }}
           >
-            {t('market.runSolver', 'Run a solver')}
+            {t('market.runSolver', 'Become a solver')}
             <span aria-hidden="true">→</span>
           </a>
         </Reveal>
