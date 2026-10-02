@@ -77,10 +77,23 @@ wanted() {
     case ",$WANTED," in *",$1,"*) return 0 ;; *) return 1 ;; esac
 }
 
+# Pick the first RPC in the list that answers. Public endpoints flake —
+# one run here died on a DNS lookup for a host that resolved fine a minute
+# later — and losing a deploy to that is avoidable.
+pick_rpc() {
+    for candidate in "$@"; do
+        if cast chain-id --rpc-url "$candidate" >/dev/null 2>&1; then
+            printf '%s' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
 deploy_to() {
     chain_id="$1"
     name="$2"
-    rpc="$3"
+    shift 2
 
     if ! wanted "$chain_id"; then
         echo
@@ -90,6 +103,13 @@ deploy_to() {
 
     echo
     echo "==> $name ($chain_id)"
+
+    if ! rpc=$(pick_rpc "$@"); then
+        echo "    no RPC answered for this chain — tried: $*" >&2
+        echo "    skipping; other chains are unaffected." >&2
+        return 0
+    fi
+    [ "$rpc" = "$1" ] || echo "    using fallback RPC $rpc"
 
     balance=$(cast balance "$DEPLOYER" --rpc-url "$rpc" 2>/dev/null || echo "0")
     if [ "$balance" = "0" ]; then
@@ -125,9 +145,9 @@ deploy_to() {
 "
 }
 
-deploy_to 84532    "base-sepolia"     "https://sepolia.base.org"
-deploy_to 11155420 "optimism-sepolia" "https://sepolia.optimism.io"
-deploy_to 97       "bsc-testnet"      "https://bsc-testnet-rpc.publicnode.com"
+deploy_to 84532    "base-sepolia"     "https://sepolia.base.org" "https://base-sepolia-rpc.publicnode.com"
+deploy_to 11155420 "optimism-sepolia" "https://sepolia.optimism.io" "https://optimism-sepolia-rpc.publicnode.com"
+deploy_to 97       "bsc-testnet"      "https://bsc-testnet-rpc.publicnode.com" "https://data-seed-prebsc-1-s1.binance.org:8545"
 
 if [ -z "$RESULTS" ]; then
     echo >&2
