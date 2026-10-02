@@ -511,6 +511,33 @@ pub async fn wait_for_receipt(
 	}
 }
 
+/// Read a block's timestamp, retrying until it is served or `timeout`
+/// passes.
+///
+/// Called right after a receipt confirms the block exists, so a miss is the
+/// RPC lagging, not a missing block: load-balanced public endpoints (e.g.
+/// `sepolia.base.org`) can return the receipt from one node and "block not
+/// found" from the next. Failing there would strand the escrow unclaimed.
+pub async fn wait_for_block_timestamp(
+	rpc: Arc<dyn ChainRpc>,
+	chain_id: u64,
+	block_number: u64,
+	timeout: std::time::Duration,
+) -> FillWorkerResult<u64> {
+	const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
+	let deadline = std::time::Instant::now() + timeout;
+	loop {
+		match rpc.block_timestamp(chain_id, block_number).await {
+			Ok(timestamp) => return Ok(timestamp),
+			Err(e) if std::time::Instant::now() < deadline => {
+				info!(chain_id, block_number, error = %e, "block not served yet; retrying");
+				tokio::time::sleep(POLL_INTERVAL).await;
+			},
+			Err(e) => return Err(e),
+		}
+	}
+}
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -674,5 +701,60 @@ mod tests {
 		assert!(result.is_err());
 		let msg = result.unwrap_err().to_string();
 		assert!(msg.contains("no RPC configured for chain_id 42"));
+	}
+
+	/// Serves a block only after `misses` lookups, like a load-balanced RPC
+	/// whose next node hasn't seen the block yet.
+	struct LaggingBlocks {
+		misses: std::sync::atomic::AtomicUsize,
+	}
+
+	#[async_trait]
+	impl ChainRpc for LaggingBlocks {
+		async fn latest_block(&self, _: u64) -> FillWorkerResult<Block> {
+			unimplemented!()
+		}
+		async fn nonce_at(&self, _: u64, _: Address) -> FillWorkerResult<u64> {
+			unimplemented!()
+		}
+		async fn estimate_gas(
+			&self,
+			_: u64,
+			_: &alloy_rpc_types_eth::TransactionRequest,
+		) -> FillWorkerResult<u64> {
+			unimplemented!()
+		}
+		async fn send_raw_transaction(&self, _: u64, _: &[u8]) -> FillWorkerResult<TxHash> {
+			unimplemented!()
+		}
+		async fn block_timestamp(&self, _: u64, block_number: u64) -> FillWorkerResult<u64> {
+			use std::sync::atomic::Ordering;
+			if self.misses.load(Ordering::SeqCst) > 0 {
+				self.misses.fetch_sub(1, Ordering::SeqCst);
+				return Err(ChainRpcError::Rpc(format!("block {block_number} not found")).into());
+			}
+			Ok(1_790_000_000)
+		}
+		fn is_live(&self) -> bool {
+			false
+		}
+	}
+
+	#[tokio::test]
+	async fn block_timestamp_retries_while_the_rpc_lags() {
+		let rpc: Arc<dyn ChainRpc> = Arc::new(LaggingBlocks { misses: 2.into() });
+		let ts = wait_for_block_timestamp(rpc, 84532, 47582926, std::time::Duration::from_secs(10))
+			.await
+			.expect("served once the node catches up");
+		assert_eq!(ts, 1_790_000_000);
+	}
+
+	#[tokio::test]
+	async fn block_timestamp_gives_up_after_the_timeout() {
+		let rpc: Arc<dyn ChainRpc> = Arc::new(LaggingBlocks { misses: usize::MAX.into() });
+		let err = wait_for_block_timestamp(rpc, 84532, 47582926, std::time::Duration::from_millis(100))
+			.await
+			.unwrap_err();
+		assert!(err.to_string().contains("block 47582926 not found"));
 	}
 }

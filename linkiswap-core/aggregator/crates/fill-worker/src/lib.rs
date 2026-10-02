@@ -299,9 +299,11 @@ impl FillWorker {
 	/// and the dashboard can watch the order progress. Returns the fill
 	/// transaction hash (the one that pays the user).
 	async fn fill_order(&self, req: &OrderFillRequest) -> FillWorkerResult<String> {
-		use chain_rpc::{sign_and_broadcast_raw, wait_for_receipt, RawTx};
+		use chain_rpc::{sign_and_broadcast_raw, wait_for_block_timestamp, wait_for_receipt, RawTx};
 
 		const RECEIPT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(180);
+		// Lagging RPC nodes catch up within seconds; this only bounds a dead one.
+		const BLOCK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 		let rpc = self.chain_rpc.clone().ok_or_else(|| {
 			FillWorkerError::NotFillable("no CHAIN_RPCS configured; cannot settle".into())
@@ -515,9 +517,13 @@ impl FillWorker {
 		self.report_status(&req.order_id, "settling", Some("claim"), None, None)
 			.await;
 		let claim_result: FillWorkerResult<String> = async {
-			let fill_timestamp: u32 = rpc
-				.block_timestamp(parsed.destination_chain_id, fill_block)
-				.await?
+			let fill_timestamp: u32 = wait_for_block_timestamp(
+				rpc.clone(),
+				parsed.destination_chain_id,
+				fill_block,
+				BLOCK_TIMEOUT,
+			)
+			.await?
 				.try_into()
 				.map_err(|_| FillWorkerError::Http("fill block timestamp exceeds u32".into()))?;
 
