@@ -291,7 +291,7 @@ export const RegistrationWizard: React.FC<RegistrationWizardProps> = ({ onRegist
                     placeholder="11155420"
                     className="w-full bg-[#08122a]/50 border border-[#454556]/40 rounded-xl p-3 text-white focus:outline-none focus:border-[#424af6] transition-all text-xs"
                   />
-                  <p className="text-[11px] text-[#8f8fa2]">Network you'll fill on. 11155420 = Optimism Sepolia.</p>
+                  <p className="text-[11px] text-[#8f8fa2]">Network you&apos;ll fill on — 11155420 OP Sepolia, 84532 Base Sepolia, 97 BNB Testnet, 80002 Polygon Amoy.</p>
                 </div>
 
                 <div className="space-y-2">

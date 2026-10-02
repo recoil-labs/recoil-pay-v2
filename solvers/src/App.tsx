@@ -1,8 +1,9 @@
+import { loadChainRegistry } from './lib/chains';
 import { RouterProvider } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider } from 'wagmi';
 import { getDefaultConfig, RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
-import { optimismSepolia, baseSepolia, mainnet, sepolia } from 'wagmi/chains';
+import { optimismSepolia, baseSepolia, bscTestnet, polygonAmoy, mainnet, sepolia } from 'wagmi/chains';
 import '@rainbow-me/rainbowkit/styles.css';
 import { router } from './router';
 import { ElevationProvider } from './providers/ElevationProvider';
@@ -15,7 +16,9 @@ export const wagmiConfig = getDefaultConfig({
   appName: 'RecoilPay Solver Portal',
   appDescription: 'Cross-chain swaps and transfers',
   projectId,
-  chains: [optimismSepolia, baseSepolia, mainnet, sepolia],
+  // Every testnet the aggregator settles on, so an operator can sign and
+  // switch without leaving the dashboard.
+  chains: [optimismSepolia, baseSepolia, bscTestnet, polygonAmoy, sepolia, mainnet],
   ssr: false,
 });
 
@@ -48,6 +51,10 @@ function AppContent() {
 
   return <RouterProvider router={router} />;
 }
+
+// Fetched once at startup so chain names and pickers reflect whatever
+// the aggregator supports, rather than a list copied into the bundle.
+void loadChainRegistry();
 
 export default function App() {
   return (

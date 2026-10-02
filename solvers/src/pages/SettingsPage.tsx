@@ -1,3 +1,4 @@
+import { chainOptions, outputSettler } from '../lib/chains';
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { SolverApiService } from '../services/solverApi';
@@ -453,10 +454,15 @@ export const SettingsPage: React.FC = () => {
             Or pick a default testnet contract:
           </p>
           <div className="flex flex-wrap gap-2">
-            {[
-              { chainId: 11155420, label: 'Optimism Sepolia', addr: '0x1CC9260E285C2C8AC8D2E7102F3978056Ec1d0a8' },
-              { chainId: 84532,    label: 'Base Sepolia',     addr: '0x52602D7cc3D833F5d28ee6D01C7F82C9b2322e10' },
-            ].map(({ chainId, label, addr }) => (
+            {/* Addresses come from the aggregator's registry rather than
+                being pasted here, so they cannot drift from what it
+                actually expects — and a new chain appears on its own. A
+                chain without a published settler is skipped rather than
+                offered as a button that sets a wrong address. */}
+            {chainOptions()
+              .map((c) => ({ chainId: c.chainId, label: c.label, addr: outputSettler(c.chainId) }))
+              .filter((c): c is { chainId: number; label: string; addr: string } => Boolean(c.addr))
+              .map(({ chainId, label, addr }) => (
               <button
                 key={chainId}
                 onClick={async () => {
@@ -489,7 +495,7 @@ export const SettingsPage: React.FC = () => {
                 <span className="material-symbols-outlined text-sm">add_circle</span>
                 <span>{label}</span>
               </button>
-            ))}
+              ))}
           </div>
         </div>
 

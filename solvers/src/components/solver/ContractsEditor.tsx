@@ -1,3 +1,4 @@
+import { chainOptions } from '../../lib/chains';
 import React, { useState } from 'react';
 import { SolverApiService, type ContractsByKindDto, type ContractEntry } from '../../services/solverApi';
 import { useContracts } from '../../hooks/use-solver-data';
@@ -104,8 +105,13 @@ export const ContractsEditor: React.FC = () => {
                     onChange={(e) => setNewChain(e.target.value)}
                     className="w-full bg-[#030d25] border border-[#454556]/40 rounded-xl px-3 py-3 text-xs text-white focus:border-[#424af6] focus:outline-none transition-all appearance-none"
                   >
-                    <option value="OP Sepolia (11155420)">OP Sepolia</option>
-                    <option value="Base Sepolia (84532)">Base Sepolia</option>
+                    {/* From the aggregator's registry, so a chain added
+                        server-side shows up without a client release. */}
+                    {chainOptions().map((c) => (
+                      <option key={c.chainId} value={`${c.label} (${c.chainId})`}>
+                        {c.label}
+                      </option>
+                    ))}
                     <option value="Polygon Amoy (80002)">Polygon Amoy</option>
                     <option value="Ethereum Sepolia (11155111)">Eth Sepolia</option>
                   </select>

@@ -1,3 +1,4 @@
+import { chainLabel } from '../../lib/chains';
 import React, { useState } from 'react';
 import { SolverApiService, type OrderTelemetryItem } from '../../services/solverApi';
 import { useQuotes, useTelemetry } from '../../hooks/use-solver-data';
@@ -21,17 +22,9 @@ export const InventoryTable: React.FC = () => {
 
   const { data: telemetryData, messages, isConnected } = useTelemetry();
 
-  const formatChain = (id: string) => {
-    const map: Record<string, string> = {
-      'eip155:11155420': 'OP Sepolia',
-      'eip155:84532': 'Base Sepolia',
-      'eip155:11155111': 'Ethereum Sepolia',
-      'eip155:42161': 'Arbitrum One',
-      'eip155:80002': 'Polygon Amoy',
-      'solana:devnet': 'Solana Devnet'
-    };
-    return map[id] || id;
-  };
+  // Resolved against the aggregator's registry, so a chain added
+  // server-side is named here without a client change.
+  const formatChain = chainLabel;
   const formatAsset = (addr: string) => addr.startsWith('0x') || addr.length > 20 ? 'USDC' : addr;
 
   return (
