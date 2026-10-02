@@ -1,2 +1,2 @@
-root: dist
+root: .
 index_fallback: true
