@@ -8,11 +8,14 @@ use oif_types::storage::CircuitBreakerStorageTrait;
 use oif_types::storage::OperatorStorageTrait;
 use oif_types::storage::VaultStorageTrait;
 use oif_types::storage::WorkerStorageTrait;
+use oif_types::storage::GiftCardQuoteStorageTrait;
+use oif_types::storage::{GiftCardTradeStorageTrait, GiftCardTradeUpdate};
 use oif_types::storage::SolverQuoteStorageTrait;
 use oif_types::{
-	storage::Repository, CircuitBreakerState, MetricsTimeSeries, Operator, Order, RollingMetrics,
-	Solver, SolverQuote, VaultBalance,
+	storage::Repository, CircuitBreakerState, GiftCardQuote, GiftCardTrade, MetricsTimeSeries,
+	Operator, Order, RollingMetrics, Solver, SolverQuote, TradeState, VaultBalance,
 };
+use std::str::FromStr;
 use std::sync::Arc;
 
 /// In-memory storage for solvers, quotes, and orders
@@ -27,6 +30,8 @@ pub struct MemoryStore {
 	pub metrics_timeseries: Arc<DashMap<String, Arc<MetricsTimeSeries>>>,
 	pub circuit_states: Arc<DashMap<String, CircuitBreakerState>>,
 	pub solver_quotes: Arc<DashMap<String, SolverQuote>>,
+	pub giftcard_quotes: Arc<DashMap<String, GiftCardQuote>>,
+	pub giftcard_trades: Arc<DashMap<String, GiftCardTrade>>,
 	pub operators: Arc<DashMap<String, Operator>>,
 	/// Pending hot-wallet private keys queued by the dashboard for the
 	/// worker's next-boot poll. Stored alongside the operator row so a
@@ -62,6 +67,8 @@ impl MemoryStore {
 			metrics_timeseries: Arc::new(DashMap::new()),
 			circuit_states: Arc::new(DashMap::new()),
 			solver_quotes: Arc::new(DashMap::new()),
+			giftcard_quotes: Arc::new(DashMap::new()),
+			giftcard_trades: Arc::new(DashMap::new()),
 			operators: Arc::new(DashMap::new()),
 			pending_identities: Arc::new(DashMap::new()),
 			encrypted_fill_wallet_keys: Arc::new(DashMap::new()),
@@ -729,6 +736,160 @@ impl SolverQuoteStorageTrait for MemoryStore {
 		} else {
 			Ok(None)
 		}
+	}
+}
+
+#[async_trait]
+impl GiftCardQuoteStorageTrait for MemoryStore {
+	async fn create_giftcard_quote(&self, quote: GiftCardQuote) -> StorageResult<GiftCardQuote> {
+		self.giftcard_quotes.insert(quote.id.clone(), quote.clone());
+		Ok(quote)
+	}
+
+	async fn list_giftcard_quotes(
+		&self,
+		solver_id: Option<&str>,
+	) -> StorageResult<Vec<GiftCardQuote>> {
+		let quotes: Vec<GiftCardQuote> = self
+			.giftcard_quotes
+			.iter()
+			.filter(|entry| solver_id.map_or(true, |id| entry.value().solver_id == id))
+			.map(|entry| entry.value().clone())
+			.collect();
+		Ok(quotes)
+	}
+
+	async fn delete_giftcard_quote(&self, id: &str) -> StorageResult<bool> {
+		Ok(self.giftcard_quotes.remove(id).is_some())
+	}
+
+	async fn toggle_pause_giftcard_quote(
+		&self,
+		id: &str,
+	) -> StorageResult<Option<GiftCardQuote>> {
+		if let Some(mut entry) = self.giftcard_quotes.get_mut(id) {
+			entry.value_mut().paused = !entry.value().paused;
+			entry.value_mut().updated_at = chrono::Utc::now();
+			Ok(Some(entry.value().clone()))
+		} else {
+			Ok(None)
+		}
+	}
+}
+
+#[async_trait]
+impl GiftCardTradeStorageTrait for MemoryStore {
+	async fn create_giftcard_trade(&self, trade: GiftCardTrade) -> StorageResult<GiftCardTrade> {
+		self.giftcard_trades.insert(trade.id.clone(), trade.clone());
+		Ok(trade)
+	}
+
+	async fn get_giftcard_trade(&self, id: &str) -> StorageResult<Option<GiftCardTrade>> {
+		Ok(self.giftcard_trades.get(id).map(|e| e.value().clone()))
+	}
+
+	async fn list_giftcard_trades(
+		&self,
+		solver_id: Option<&str>,
+		user_address: Option<&str>,
+	) -> StorageResult<Vec<GiftCardTrade>> {
+		Ok(self
+			.giftcard_trades
+			.iter()
+			.filter(|e| solver_id.map_or(true, |id| e.value().solver_id == id))
+			.filter(|e| {
+				user_address.map_or(true, |a| e.value().user_address.eq_ignore_ascii_case(a))
+			})
+			.map(|e| e.value().clone())
+			.collect())
+	}
+
+	async fn transition_giftcard_trade(
+		&self,
+		id: &str,
+		expected_state: &str,
+		update: GiftCardTradeUpdate,
+	) -> StorageResult<Option<GiftCardTrade>> {
+		let Some(mut entry) = self.giftcard_trades.get_mut(id) else {
+			return Ok(None);
+		};
+		// `get_mut` holds an exclusive lock on the key for this scope, which
+		// is what stands in for the Postgres `WHERE state = $2` guard: the
+		// compare and the write cannot be split by another task.
+		if entry.value().state.as_str() != expected_state {
+			return Ok(None);
+		}
+
+		let Ok(next) = TradeState::from_str(&update.state) else {
+			return Ok(None);
+		};
+
+		let t = entry.value_mut();
+		t.state = next;
+		t.deadline_at = update.deadline_at;
+		if update.resolution_note.is_some() {
+			t.resolution_note = update.resolution_note.clone();
+		}
+		if update.recipient_pubkey.is_some() {
+			t.recipient_pubkey = update.recipient_pubkey.clone();
+		}
+		if update.code_commitment.is_some() {
+			t.code_commitment = update.code_commitment.clone();
+		}
+		if let Some(v) = update.sealed_code.clone() {
+			t.sealed_code = serde_json::from_value(v).ok();
+		}
+		if update.escrow_tx_hash.is_some() {
+			t.escrow_tx_hash = update.escrow_tx_hash.clone();
+		}
+		if update.release_tx_hash.is_some() {
+			t.release_tx_hash = update.release_tx_hash.clone();
+		}
+		t.updated_at = chrono::Utc::now();
+		Ok(Some(t.clone()))
+	}
+
+	async fn claim_due_trades(&self, limit: i64) -> StorageResult<Vec<GiftCardTrade>> {
+		let now = chrono::Utc::now();
+		let mut due: Vec<GiftCardTrade> = self
+			.giftcard_trades
+			.iter()
+			.filter(|e| e.value().state.has_deadline())
+			.filter(|e| e.value().deadline_at.is_some_and(|d| d <= now))
+			.map(|e| e.value().clone())
+			.collect();
+		due.sort_by_key(|t| t.deadline_at);
+		due.truncate(limit.max(0) as usize);
+		Ok(due)
+	}
+
+	async fn claim_unpaid_trades(&self, limit: i64) -> StorageResult<Vec<GiftCardTrade>> {
+		let mut unpaid: Vec<GiftCardTrade> = self
+			.giftcard_trades
+			.iter()
+			.filter(|e| e.value().release_tx_hash.is_none())
+			.filter(|e| e.value().payee().is_some())
+			.map(|e| e.value().clone())
+			.collect();
+		unpaid.sort_by_key(|t| t.updated_at);
+		unpaid.truncate(limit.max(0) as usize);
+		Ok(unpaid)
+	}
+
+	async fn mark_giftcard_trade_paid(
+		&self,
+		id: &str,
+		release_tx_hash: &str,
+	) -> StorageResult<bool> {
+		let Some(mut entry) = self.giftcard_trades.get_mut(id) else {
+			return Ok(false);
+		};
+		if entry.value().release_tx_hash.is_some() {
+			return Ok(false);
+		}
+		entry.value_mut().release_tx_hash = Some(release_tx_hash.to_string());
+		entry.value_mut().updated_at = chrono::Utc::now();
+		Ok(true)
 	}
 }
 

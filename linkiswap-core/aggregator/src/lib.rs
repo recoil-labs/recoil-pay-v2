@@ -5,7 +5,9 @@
 
 use oif_service::{
 	jobs::UpgradableJobScheduler, BackgroundJob, BackgroundJobHandler, IntegrityService,
-	IntegrityTrait, JobProcessor, JobProcessorConfig, SolverFilterService, SolverFilterTrait,
+	GiftCardPayoutWorker, GiftCardResolver, IntegrityTrait, JobProcessor, JobProcessorConfig,
+	SolverFilterService,
+	SolverFilterTrait,
 	SolverService, SolverServiceTrait,
 };
 
@@ -576,12 +578,25 @@ where
 			"chain registry loaded"
 		);
 
+		// Gift card settlement. The key is read from the environment rather
+		// than config so it never lands in a file; without it the client
+		// reports itself disabled and the gift card endpoints refuse trades
+		// instead of accepting ones nobody could ever pay out.
+		let giftcard_escrow = Arc::new(oif_service::GiftCardEscrowClient::new(
+			Arc::clone(&chain_registry),
+			std::env::var("GIFTCARD_ATTESTOR_KEY").ok().as_deref(),
+		));
+		if !giftcard_escrow.is_enabled() {
+			warn!("GIFTCARD_ATTESTOR_KEY is not set — gift card trades cannot be settled");
+		}
+
 		// Create application state
 		let app_state = AppState {
 			aggregator_service,
 			order_service,
 			solver_service,
 			storage: storage_arc,
+			giftcard_escrow: Arc::clone(&giftcard_escrow),
 			integrity_service,
 			job_processor: job_processor_arc,
 			authenticator,
@@ -704,10 +719,32 @@ where
 		}
 
 		// Create the router using the builder pattern
-		let (app, _) = self.start().await?;
+		let (app, app_state) = self.start().await?;
 
 		// TTL cleanup is storage-specific and should be handled by the storage implementation
 		info!("Storage backend initialized successfully");
+
+		// Gift card trades have deadlines, and a deadline with nobody
+		// watching it is not a deadline. Without this task running, a party
+		// holding the leg no contract can verify could keep both the card
+		// and the money simply by never replying. Spawned here rather than
+		// as a scheduled job because it must outlive any one request and
+		// needs no coordination with the job queue.
+		{
+			let resolver = GiftCardResolver::new(app_state.storage.clone());
+			tokio::spawn(resolver.run());
+			info!("Gift card deadline resolver spawned");
+
+			// Separate from the resolver because terminal trades arrive from
+			// two places — a deadline firing and a merchant attesting — and
+			// both should drain through one implementation of "who gets
+			// paid". It no-ops loudly when no attestor key is configured.
+			let payouts = GiftCardPayoutWorker::new(
+				app_state.storage.clone(),
+				app_state.giftcard_escrow.clone(),
+			);
+			tokio::spawn(payouts.run());
+		}
 
 		// Start the server
 		let listener = tokio::net::TcpListener::bind(addr).await?;

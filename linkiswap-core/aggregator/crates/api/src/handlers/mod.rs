@@ -1,5 +1,7 @@
 pub mod common;
 pub mod chains;
+pub mod giftcard_quotes;
+pub mod giftcard_trades;
 pub mod health;
 pub mod operators;
 pub mod orders;
@@ -9,6 +11,15 @@ pub mod solvers;
 pub mod workers;
 
 pub use chains::get_chains;
+pub use giftcard_quotes::{
+	delete_giftcard_quote, get_giftcard_quotes, post_giftcard_quotes_submit,
+	rank_giftcard_quotes, toggle_pause_giftcard_quote,
+};
+pub use giftcard_trades::{
+	create_giftcard_trade, get_giftcard_trade, giftcard_trade_attest,
+	giftcard_trade_deliver_code, giftcard_trade_dispute, giftcard_trade_escrow_funded,
+	list_giftcard_trades, resolve_giftcard_dispute,
+};
 pub use health::health;
 pub use operators::{
 	delete_settlement_contract, generate_operator_key, get_operator, get_operators,

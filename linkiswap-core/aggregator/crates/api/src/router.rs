@@ -13,15 +13,23 @@ use tower_http::{
 use tracing::Level;
 
 use crate::handlers::{
-	delete_settlement_contract, delete_solver_quote, delete_vault_asset, generate_operator_key,
-	get_chains, get_operator, get_operators, get_order, get_register_message,
+	create_giftcard_trade, delete_giftcard_quote, delete_settlement_contract, delete_solver_quote,
+	delete_vault_asset,
+	generate_operator_key, get_chains, get_giftcard_quotes, get_giftcard_trade, get_operator,
+	get_operators, get_order,
+	get_register_message,
 	get_settlement_contracts,
 	get_solver_by_id, get_solver_identities, get_solvers, get_supported_contracts,
 	get_solver_quotes, get_telemetry, get_vault_balances, get_worker, health,
 	operator_heartbeat, post_account_register, post_account_unregister, post_orders,
-	post_quotes, post_quotes_submit, post_trust_components, post_vault_snapshot,
+	giftcard_trade_attest, giftcard_trade_deliver_code, giftcard_trade_dispute,
+	giftcard_trade_escrow_funded, list_giftcard_trades, resolve_giftcard_dispute,
+	post_giftcard_quotes_submit, post_quotes, post_quotes_submit, post_trust_components,
+	rank_giftcard_quotes,
+	post_vault_snapshot,
 	claim_orders, extend_order_claim, record_fill_outcome, register_worker, rotate_api_key,
-	set_settlement_contract, sign_fill, toggle_pause_solver_quote, update_order_status,
+	set_settlement_contract, sign_fill, toggle_pause_giftcard_quote, toggle_pause_solver_quote,
+	update_order_status,
 	worker_heartbeat, ws_orders,
 };
 use crate::security::add_security_headers;
@@ -90,6 +98,37 @@ pub fn create_router() -> Router<AppState> {
 		.route("/solver-api/quotes", get(get_solver_quotes))
 		.route("/solver-api/quotes/{id}", delete(delete_solver_quote))
 		.route("/solver-api/quotes/{id}/pause", post(toggle_pause_solver_quote))
+		// Gift card book — same verbs as the swap quote routes above, on a
+		// separate path because the two asset classes settle differently.
+		.route(
+			"/solver-api/giftcard-quotes/submit",
+			post(post_giftcard_quotes_submit),
+		)
+		.route("/solver-api/giftcard-quotes", get(get_giftcard_quotes))
+		.route("/api/v1/giftcard-quotes/rank", post(rank_giftcard_quotes))
+		// Gift card trades. Authorization is per-party inside each handler —
+		// a merchant presents x-api-key, a user signs the trade id — so these
+		// sit on the public prefix rather than behind the solver-api gate.
+		.route("/api/v1/giftcard-trades", post(create_giftcard_trade).get(list_giftcard_trades))
+		.route("/api/v1/giftcard-trades/{id}", get(get_giftcard_trade))
+		.route("/api/v1/giftcard-trades/{id}/escrow", post(giftcard_trade_escrow_funded))
+		.route("/api/v1/giftcard-trades/{id}/code", post(giftcard_trade_deliver_code))
+		.route("/api/v1/giftcard-trades/{id}/attest", post(giftcard_trade_attest))
+		.route("/api/v1/giftcard-trades/{id}/dispute", post(giftcard_trade_dispute))
+		// Adjudication. Under /solver-api so the auth middleware gates it —
+		// this is the one gift card route a counterparty must never reach.
+		.route(
+			"/solver-api/giftcard-trades/{id}/resolve",
+			post(resolve_giftcard_dispute),
+		)
+		.route(
+			"/solver-api/giftcard-quotes/{id}",
+			delete(delete_giftcard_quote),
+		)
+		.route(
+			"/solver-api/giftcard-quotes/{id}/pause",
+			post(toggle_pause_giftcard_quote),
+		)
 		.route("/solver-api/telemetry", get(get_telemetry))
 		// Vault balance tracking — operator-attested until the
 		// vault contract lands. `GET` returns the dashboard's view
