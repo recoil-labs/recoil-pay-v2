@@ -10,12 +10,15 @@ const CHAIN_NAMES: Record<number, string> = {
   8453: 'Base',
   42161: 'Arbitrum',
   56: 'BNB Chain',
+  204: 'opBNB',
   43114: 'Avalanche',
   11155111: 'Ethereum Sepolia',
   84532: 'Base Sepolia',
   11155420: 'OP Sepolia',
   421614: 'Arbitrum Sepolia',
   80002: 'Polygon Amoy',
+  97: 'BNB Chain Testnet',
+  5611: 'opBNB Testnet',
   9000000001: 'Solana',
   9000000002: 'Solana Devnet',
 };
@@ -28,12 +31,15 @@ const EXPLORERS: Record<number, string> = {
   8453: 'https://basescan.org',
   42161: 'https://arbiscan.io',
   56: 'https://bscscan.com',
+  204: 'https://opbnb.bscscan.com',
   43114: 'https://snowtrace.io',
   11155111: 'https://sepolia.etherscan.io',
   84532: 'https://sepolia.basescan.org',
   11155420: 'https://sepolia-optimism.etherscan.io',
   421614: 'https://sepolia.arbiscan.io',
   80002: 'https://amoy.polygonscan.com',
+  97: 'https://testnet.bscscan.com',
+  5611: 'https://testnet.opbnbscan.com',
 };
 
 export const SOLANA_CHAIN_IDS: ReadonlySet<number> = new Set([9000000001, 9000000002]);

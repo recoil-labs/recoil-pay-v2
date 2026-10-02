@@ -108,8 +108,8 @@ impl ChainRegistry {
 	///
 	/// - OP Sepolia and Base Sepolia share two settler contracts with
 	///   the input/output roles mirrored between the chains.
-	/// - Ethereum Sepolia and Polygon Amoy use the canonical OIF
-	///   deployments.
+	/// - Ethereum Sepolia, Polygon Amoy and BSC testnet use the
+	///   canonical OIF deployments.
 	/// - The oracle on every chain is an `AlwaysYesOracle` (testnet
 	///   only — attests everything).
 	pub fn testnet_default() -> Self {
@@ -164,8 +164,22 @@ impl ChainRegistry {
 				input_settler: "0x1CC9260E285C2C8AC8D2E7102F3978056Ec1d0a8".into(),
 				output_settler: "0x52602D7cc3D833F5d28ee6D01C7F82C9b2322e10".into(),
 				oracle: "0x306766B063383DF67035465BA883c46bBCf6254c".into(),
-				permit2,
+				permit2: permit2.clone(),
 				tokens: vec![usdc("0x8c1963bA445dd562Da0B6c6fbCa070921B3fa8E6")],
+			},
+			// Oracle and USDC deployed from oif-contracts @ 8e38b9bb.
+			ChainInfo {
+				chain_id: 97,
+				name: "bsc-testnet".into(),
+				rpc_url: "https://bsc-testnet-rpc.publicnode.com".into(),
+				input_settler: "0x1CC9260E285C2C8AC8D2E7102F3978056Ec1d0a8".into(),
+				output_settler: "0x52602D7cc3D833F5d28ee6D01C7F82C9b2322e10".into(),
+				oracle: "0xd31b6A3b46Bfd45AA629E8739ff35C032d2AE622".into(),
+				permit2,
+				// A 6-decimal MockERC20, deliberately matching the other
+				// testnets. Real BSC USDC (mainnet) has 18 decimals — do not
+				// copy this entry's decimals when adding chain 56.
+				tokens: vec![usdc("0x67bF9ba31f64de698EfD23c2CB0208191A5C2A9e")],
 			},
 		])
 	}
@@ -280,9 +294,9 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn testnet_default_has_all_four_chains() {
+	fn testnet_default_has_all_five_chains() {
 		let reg = ChainRegistry::testnet_default();
-		assert_eq!(reg.chain_ids(), vec![80002, 84532, 11155111, 11155420]);
+		assert_eq!(reg.chain_ids(), vec![97, 80002, 84532, 11155111, 11155420]);
 		for chain in reg.iter() {
 			assert!(chain.input_settler.starts_with("0x"));
 			assert!(chain.output_settler.starts_with("0x"));
@@ -299,6 +313,25 @@ mod tests {
 		let base = reg.get(84532).unwrap();
 		assert_eq!(op.input_settler, base.output_settler);
 		assert_eq!(op.output_settler, base.input_settler);
+	}
+
+	#[test]
+	fn bsc_testnet_uses_canonical_settlers_and_6_decimal_usdc() {
+		let reg = ChainRegistry::testnet_default();
+		let bsc = reg.by_caip2("eip155:97").unwrap();
+		assert_eq!(bsc.name, "bsc-testnet");
+		assert_eq!(
+			bsc.input_settler,
+			"0x1CC9260E285C2C8AC8D2E7102F3978056Ec1d0a8"
+		);
+		assert_eq!(
+			bsc.output_settler,
+			"0x52602D7cc3D833F5d28ee6D01C7F82C9b2322e10"
+		);
+		assert_eq!(bsc.oracle, "0xd31b6A3b46Bfd45AA629E8739ff35C032d2AE622");
+		let usdc = bsc.token_by_symbol("USDC").unwrap();
+		assert_eq!(usdc.address, "0x67bF9ba31f64de698EfD23c2CB0208191A5C2A9e");
+		assert_eq!(usdc.decimals, 6);
 	}
 
 	#[test]

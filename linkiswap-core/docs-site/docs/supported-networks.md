@@ -19,11 +19,13 @@ Any pair of chains listed below can swap to any other. USDC is the common asset 
 | **Base Sepolia** | `84532` | USDC |
 | **Polygon Amoy** | `80002` | USDC |
 | **Ethereum Sepolia** | `11155111` | USDC |
+| **BNB Chain Testnet** (BSC testnet) | `97` | USDC |
 
-All four chains are connected all-to-all, so any of these are valid intents:
+All five chains are connected all-to-all, so any of these are valid intents:
 
 - USDC on OP Sepolia → USDC on Polygon Amoy
 - USDC on Ethereum Sepolia → USDC on Base Sepolia
+- USDC on BNB Chain Testnet → USDC on Base Sepolia
 - USDT on OP Sepolia → USDC on Base Sepolia
 - …and every other combination.
 
@@ -61,6 +63,13 @@ Most wallets recognise these testnets natively. If yours doesn't, add them by ha
 - **Currency:** ETH
 - **Explorer:** https://sepolia.etherscan.io
 
+### BNB Chain Testnet
+
+- **RPC URL:** `https://bsc-testnet-rpc.publicnode.com`
+- **Chain ID:** `97`
+- **Currency:** tBNB
+- **Explorer:** https://testnet.bscscan.com
+
 Or use **[chainlist.org](https://chainlist.org/?testnets=true)** — search the chain name, click **Connect Wallet**, and it will add itself.
 
 ---
@@ -75,6 +84,7 @@ Testnet gas has no cost — you just need to grab some from a faucet.
 | Base Sepolia | https://faucet.quicknode.com/base/sepolia |
 | Polygon Amoy | https://faucet.polygon.technology (select Amoy + POL) |
 | Ethereum Sepolia | https://cloud.google.com/application/web3/faucet/ethereum/sepolia |
+| BNB Chain Testnet | https://www.bnbchain.org/en/testnet-faucet |
 
 A single request gives you enough for dozens of swaps.
 
@@ -85,16 +95,21 @@ A single request gives you enough for dozens of swaps.
 The USDC on these chains is not the real Circle USDC — it's a mock ERC-20 with a public `mint` function, deployed for RecoilPay testing. You can:
 
 1. **Ask in the RecoilPay community.** The team can mint you a batch.
-2. **Mint your own** if you're comfortable with a block explorer. Every USDC contract listed below has a `mint(address, uint256)` function you can call from Etherscan-style explorers. Six decimals: `1 USDC = 1_000_000` in the raw amount.
+2. **Mint your own** if you're comfortable with a block explorer. Every USDC contract listed below has a `mint(address, uint256)` function you can call from Etherscan-style explorers. Use the decimals in the table: every testnet USDC below has 6, so `1 USDC = 1_000_000` in the raw amount.
 
 ### USDC contract addresses
 
-| Chain | USDC address |
-|---|---|
-| Optimism Sepolia | `0x191688B2Ff5Be8F0A5BCAB3E819C900a810FAaf6` |
-| Base Sepolia | `0x73c83DAcc74bB8a704717AC09703b959E74b9705` |
-| Polygon Amoy | `0x8c1963bA445dd562Da0B6c6fbCa070921B3fa8E6` |
-| Ethereum Sepolia | `0x8c1963bA445dd562Da0B6c6fbCa070921B3fa8E6` |
+| Chain | USDC address | Decimals |
+|---|---|---|
+| Optimism Sepolia | `0x191688B2Ff5Be8F0A5BCAB3E819C900a810FAaf6` | 6 |
+| Base Sepolia | `0x73c83DAcc74bB8a704717AC09703b959E74b9705` | 6 |
+| Polygon Amoy | `0x8c1963bA445dd562Da0B6c6fbCa070921B3fa8E6` | 6 |
+| Ethereum Sepolia | `0x8c1963bA445dd562Da0B6c6fbCa070921B3fa8E6` | 6 |
+| BNB Chain Testnet | `0x67bF9ba31f64de698EfD23c2CB0208191A5C2A9e` | 6 |
+
+:::caution Decimals differ on BNB Chain mainnet
+The testnet mock above uses 6 decimals to match the other testnets. Real USDC and USDT on BNB Chain **mainnet** have **18** decimals, so the same raw amount means a very different value there. Always read decimals per chain from `GET /api/v1/chains` instead of assuming 6.
+:::
 
 ### USDT (Optimism Sepolia only)
 
@@ -106,7 +121,7 @@ The USDC on these chains is not the real Circle USDC — it's a mock ERC-20 with
 
 You can *type* sentences involving mainnet chains and other tokens — the app will recognise them, but tell you they aren't executable. Today:
 
-- **Mainnet chains** (Ethereum, Base, Optimism, Arbitrum, Polygon) — recognised, not live.
+- **Mainnet chains** (Ethereum, Base, Optimism, Arbitrum, Polygon, BNB Chain, opBNB) — recognised, not live. Name the testnet explicitly (`bsc testnet`, not `bsc`) to swap today.
 - **Native ETH as an input** — swaps must start from an ERC-20 (USDC or USDT).
 - **Solana and other non-EVM chains** — recognised, not supported.
 - **ENS recipients** (`.eth` names) — recognised, not supported. Use full `0x…` addresses.

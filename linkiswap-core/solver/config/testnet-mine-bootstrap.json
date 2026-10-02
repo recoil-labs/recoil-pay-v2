@@ -46,6 +46,17 @@
       "rpc_urls": ["https://ethereum-sepolia-rpc.publicnode.com", "https://1rpc.io/sepolia"],
       "input_settler_address": "0x1CC9260E285C2C8AC8D2E7102F3978056Ec1d0a8",
       "output_settler_address": "0x52602D7cc3D833F5d28ee6D01C7F82C9b2322e10"
+    },
+    {
+      "chain_id": 97,
+      "name": "bsc-testnet",
+      "type": "new",
+      "tokens": [
+        { "symbol": "USDC", "name": "USD Coin", "address": "0x67bF9ba31f64de698EfD23c2CB0208191A5C2A9e", "decimals": 6 }
+      ],
+      "rpc_urls": ["https://bsc-testnet-rpc.publicnode.com", "https://data-seed-prebsc-1-s1.binance.org:8545"],
+      "input_settler_address": "0x1CC9260E285C2C8AC8D2E7102F3978056Ec1d0a8",
+      "output_settler_address": "0x52602D7cc3D833F5d28ee6D01C7F82C9b2322e10"
     }
   ],
   "settlement": {
@@ -57,20 +68,23 @@
           "11155420": ["0x309eAdeDfB7b7Da32b8714a9AA950c8B02924a8e"],
           "84532": ["0x309eAdeDfB7b7Da32b8714a9AA950c8B02924a8e"],
           "80002": ["0x306766B063383DF67035465BA883c46bBCf6254c"],
-          "11155111": ["0x306766B063383DF67035465BA883c46bBCf6254c"]
+          "11155111": ["0x306766B063383DF67035465BA883c46bBCf6254c"],
+          "97": ["0xd31b6A3b46Bfd45AA629E8739ff35C032d2AE622"]
         },
         "output": {
           "11155420": ["0x309eAdeDfB7b7Da32b8714a9AA950c8B02924a8e"],
           "84532": ["0x309eAdeDfB7b7Da32b8714a9AA950c8B02924a8e"],
           "80002": ["0x306766B063383DF67035465BA883c46bBCf6254c"],
-          "11155111": ["0x306766B063383DF67035465BA883c46bBCf6254c"]
+          "11155111": ["0x306766B063383DF67035465BA883c46bBCf6254c"],
+          "97": ["0xd31b6A3b46Bfd45AA629E8739ff35C032d2AE622"]
         }
       },
       "routes": {
-        "11155420": [84532, 80002, 11155111],
-        "84532": [11155420, 80002, 11155111],
-        "80002": [11155420, 84532, 11155111],
-        "11155111": [11155420, 84532, 80002]
+        "11155420": [84532, 80002, 11155111, 97],
+        "84532": [11155420, 80002, 11155111, 97],
+        "80002": [11155420, 84532, 11155111, 97],
+        "11155111": [11155420, 84532, 80002, 97],
+        "97": [11155420, 84532, 80002, 11155111]
       },
       "dispute_period_seconds": 1
     }
