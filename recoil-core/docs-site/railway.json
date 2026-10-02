@@ -1,0 +1,7 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": { "builder": "RAILPACK" },
+  "deploy": {
+    "startCommand": "npx docusaurus serve --port ${PORT:-8080} --host 0.0.0.0"
+  }
+}
