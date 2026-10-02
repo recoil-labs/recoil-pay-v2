@@ -42,7 +42,7 @@ Same-chain sends skip the solvers and go straight from the user's wallet. Senten
 - **Non-custodial.** Funds only move on your user's signature. Neither RecoilPay nor your page ever holds them.
 - **No API key.** The components call the same public API as everything else in this section. Partner keys, when they arrive, will be additive. See [Going to production](./going-live).
 - **Your credentials, not ours.** The packages carry no RecoilPay secrets. Plain-English parsing uses your own Hugging Face token, and mobile wallets use your own WalletConnect project id.
-- **Testnets today.** Base Sepolia, OP Sepolia, Ethereum Sepolia and Polygon Amoy, with mock tokens. See [Supported networks](../supported-networks).
+- **Testnets today.** Base Sepolia, OP Sepolia, Ethereum Sepolia, Polygon Amoy and BNB Chain Testnet, with mock tokens. See [Supported networks](../supported-networks).
 
 ---
 

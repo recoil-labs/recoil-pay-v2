@@ -11,7 +11,7 @@ Everything in this section works today. But RecoilPay is on testnet, and there a
 
 ## What's testnet-only
 
-RecoilPay runs on four public testnets: Optimism Sepolia, Base Sepolia, Polygon Amoy, and Ethereum Sepolia. See [Supported networks](../supported-networks) for chain ids, tokens, and faucets.
+RecoilPay runs on five public testnets: Optimism Sepolia, Base Sepolia, Polygon Amoy, Ethereum Sepolia, and BNB Chain Testnet. See [Supported networks](../supported-networks) for chain ids, tokens, and faucets.
 
 The tokens are **mock ERC-20s** with public `mint` functions, deployed for RecoilPay testing. The USDC on these chains is not Circle's USDC. That's convenient — you can mint yourself whatever you need to test — but it means:
 

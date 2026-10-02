@@ -71,7 +71,7 @@ Those long hex strings are **not** plain addresses — they're [ERC-7930 interop
 | `outputs[].receiver` | OP Sepolia `11155420` | `0x632B…0E55` |
 | `outputs[].asset` | OP Sepolia `11155420` | USDC `0x1916…Aaf6` |
 
-`"amount": "1000000"` is **base units as a decimal string** — USDC has 6 decimals, so this is 1 USDC. Note the output has no `amount`: with `swapType: "exact-input"` you fix the input and the solvers compete on what they'll deliver.
+`"amount": "1000000"` is **base units as a decimal string** — Base Sepolia USDC has 6 decimals, so this is 1 USDC. Decimals vary by chain (USDC on BNB Chain mainnet has 18), so read them from `GET /api/v1/chains` rather than hardcoding 6. Note the output has no `amount`: with `swapType: "exact-input"` you fix the input and the solvers compete on what they'll deliver.
 
 Three details in that body matter more than they look:
 

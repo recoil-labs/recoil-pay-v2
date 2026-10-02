@@ -1,6 +1,6 @@
 {
   "name": "@recoilpay/intent-react",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Drop-in React component for RecoilPay intents: type a swap or send in plain English, quote across solvers, confirm, track.",
   "keywords": [
     "recoilpay",
@@ -67,7 +67,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@recoilpay/intent-core": "^0.1.0"
+    "@recoilpay/intent-core": "^0.2.0"
   },
   "peerDependencies": {
     "react": ">=18",

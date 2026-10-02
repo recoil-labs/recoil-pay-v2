@@ -46,12 +46,13 @@ Even on testnet, get into this habit now — the mainnet version of this mistake
 
 Some wallets ship with the testnets already enabled; some don't. If a chain doesn't show up when you connect to RecoilPay, add it manually. Full RPC details are on [Supported networks](./supported-networks) — or use **[chainlist.org](https://chainlist.org/?testnets=true)** to add them with one click.
 
-The four you'll want:
+The five you'll want:
 
 - Optimism Sepolia
 - Base Sepolia
 - Polygon Amoy
 - Ethereum Sepolia
+- BNB Chain Testnet (BSC testnet)
 
 You don't need to switch networks manually — RecoilPay will prompt you to switch to the source chain when you confirm an intent.
 
@@ -67,6 +68,7 @@ Every swap needs a tiny amount of gas on the source chain. On testnet, gas is fr
 | Base Sepolia | https://faucet.quicknode.com/base/sepolia |
 | Polygon Amoy | https://faucet.polygon.technology (Amoy + POL) |
 | Ethereum Sepolia | https://cloud.google.com/application/web3/faucet/ethereum/sepolia |
+| BNB Chain Testnet | https://www.bnbchain.org/en/testnet-faucet (tBNB) |
 
 Some faucets ask you to sign in with GitHub or a Google account — this is a spam prevention measure, not a wallet permission.
 
