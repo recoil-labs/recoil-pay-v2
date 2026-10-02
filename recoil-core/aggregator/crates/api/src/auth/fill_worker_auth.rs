@@ -46,16 +46,6 @@ pub const NONCE_WINDOW_SECS: u64 = 300;
 
 const SIGNING_DOMAIN: &[u8] = b"recoilpay-auth";
 
-/// The domain this used to be signed with.
-///
-/// The aggregator and the fill-worker are separate deployments, so they can
-/// never change a shared constant at the same instant. Accepting the old one
-/// too means either can be rolled out first without every fill failing in
-/// between. Remove it once no worker signs with it — a signature using it is
-/// logged as `legacy signing domain`, so "nobody does any more" is an
-/// observation rather than a guess.
-const LEGACY_SIGNING_DOMAIN: &[u8] = b"linkiswap-auth";
-
 /// Result returned to handlers that want to know who the caller is.
 #[derive(Debug, Clone)]
 pub struct AuthenticatedSolver {
@@ -75,22 +65,9 @@ pub fn build_signing_payload(
 	method: &str,
 	path: &str,
 ) -> alloy_primitives::B256 {
-	build_signing_payload_with(SIGNING_DOMAIN, solver_id, timestamp, nonce_hex, method, path)
-}
-
-/// The same payload under an explicit domain, so verification can try the
-/// legacy one without duplicating the layout.
-fn build_signing_payload_with(
-	domain: &[u8],
-	solver_id: &str,
-	timestamp: u64,
-	nonce_hex: &str,
-	method: &str,
-	path: &str,
-) -> alloy_primitives::B256 {
 	use alloy_primitives::keccak256;
 	let mut buf = Vec::with_capacity(
-		domain.len()
+		SIGNING_DOMAIN.len()
 			+ solver_id.len()
 			+ 20 // timestamp digits
 			+ nonce_hex.len()
@@ -98,7 +75,7 @@ fn build_signing_payload_with(
 			+ path.len()
 			+ 8, // separators
 	);
-	buf.extend_from_slice(domain);
+	buf.extend_from_slice(SIGNING_DOMAIN);
 	buf.push(b'\n');
 	buf.extend_from_slice(solver_id.as_bytes());
 	buf.push(b'\n');
@@ -227,28 +204,9 @@ pub async fn fill_worker_auth_middleware(
 		Ok(a) => a,
 		Err(e) => return reject(&FillWorkerAuthError::Malformed(HDR_SIGNATURE, e.to_string())),
 	};
-	let mut recovered_str = format!("{recovered:#x}").to_lowercase();
+	let recovered_str = format!("{recovered:#x}").to_lowercase();
 	if recovered_str != solver_id {
-		// Fall back to the previous signing domain, so a worker that has not
-		// been redeployed yet keeps working. See LEGACY_SIGNING_DOMAIN.
-		let legacy = build_signing_payload_with(
-			LEGACY_SIGNING_DOMAIN, &solver_id, timestamp, &nonce, &method, &path,
-		);
-		match sig.recover_address_from_prehash(&legacy) {
-			Ok(a) => {
-				recovered_str = format!("{a:#x}").to_lowercase();
-				if recovered_str == solver_id {
-					tracing::warn!(
-						solver_id = %solver_id,
-						"accepted a legacy signing domain; redeploy this worker"
-					);
-				}
-			},
-			Err(_) => {},
-		}
-		if recovered_str != solver_id {
-			return reject(&FillWorkerAuthError::SignerMismatch);
-		}
+		return reject(&FillWorkerAuthError::SignerMismatch);
 	}
 
 	// 3. nonce cache (replay protection)
