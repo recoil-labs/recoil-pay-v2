@@ -64,6 +64,16 @@ impl Default for AuthConfig {
 				"/api/v1/orders".to_string(),
 				"/api/v1/quotes".to_string(),
 				"/api/v1/chains".to_string(),
+				// The end-user gift card surface, anonymous for the same
+				// reason as the swap surface above. `rank` only reads the
+				// book a merchant already published, and every mutating
+				// call under `/api/v1/giftcard-trades` authorises the
+				// caller itself — a merchant by `x-api-key` resolved to
+				// that trade's operator, a user by an EIP-191 signature
+				// over the trade id recovered against it. Neither can act
+				// in the other's role, and neither has an account here.
+				"/api/v1/giftcard-quotes/rank".to_string(),
+				"/api/v1/giftcard-trades".to_string(),
 				// Registration bootstrap: an operator has no credential
 				// until these succeed. Both verify an EIP-191 signature
 				// internally, so they are not unauthenticated in effect.
@@ -350,6 +360,14 @@ mod deny_by_default_tests {
 			"/solver-api/telemetry",
 			"/solver-api/vaults",
 			"/solver-api/quotes",
+			// A merchant's own gift card book and its mutations. The
+			// anonymous surface is the *user* side; publishing or
+			// withdrawing a rate is not part of it.
+			"/solver-api/giftcard-quotes",
+			"/solver-api/giftcard-quotes/gcq-1/pause",
+			// Adjudication decides where escrowed money goes and can take a
+			// merchant's stake. A counterparty must never reach it.
+			"/solver-api/giftcard-trades/gct-1/resolve",
 		] {
 			assert!(!is_public(&cfg, path), "{path} must require authentication");
 		}
@@ -377,6 +395,15 @@ mod deny_by_default_tests {
 			"/swagger-ui/",
 			"/swagger-ui/index.html",
 			"/api-docs/openapi.json",
+			// The gift card user surface. Every mutating call here
+			// authorises its own caller — a user signs the trade id, a
+			// merchant presents an api key tied to that trade — so the
+			// prefix being open does not make the actions open.
+			"/api/v1/giftcard-quotes/rank",
+			"/api/v1/giftcard-trades",
+			"/api/v1/giftcard-trades/gct-1",
+			"/api/v1/giftcard-trades/gct-1/attest",
+			"/api/v1/giftcard-trades/gct-1/escrow",
 		] {
 			assert!(is_public(&cfg, path), "{path} must stay reachable anonymously");
 		}
@@ -398,6 +425,13 @@ mod deny_by_default_tests {
 			"/solver-api/orders/claim",
 			"/solver-api/telemetry",
 			"/solver-api/vaults",
+			// `/api/v1/giftcard-quotes/rank` is public, but the merchant
+			// book it reads from must not become public with it.
+			"/solver-api/giftcard-quotes",
+			"/solver-api/giftcard-quotes/gcq-1",
+			// `/api/v1/giftcard-trades` is public; the adjudication route
+			// lives under a different prefix precisely so it is not.
+			"/solver-api/giftcard-trades/gct-1/resolve",
 		] {
 			assert!(
 				!is_public(&cfg, path),

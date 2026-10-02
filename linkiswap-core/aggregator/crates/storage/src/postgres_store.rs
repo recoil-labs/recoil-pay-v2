@@ -7,6 +7,7 @@ use oif_types::storage::OperatorStorageTrait;
 use oif_types::storage::VaultStorageTrait;
 use oif_types::storage::WorkerStorageTrait;
 use oif_types::VaultBalance;
+use oif_types::{GiftCardQuote, GiftCardSide, GiftCardTrade, GiftCardType, SealedCode, TradeState};
 
 /// Postgres `jsonb` cannot hold a NUL byte: writing one fails the whole
 /// statement with "unsupported Unicode escape sequence". EVM revert reasons
@@ -916,6 +917,467 @@ impl SolverQuoteStorageTrait for PostgresStore {
 			created_at: r.get("created_at"),
 			updated_at: r.get("updated_at"),
 		}))
+	}
+}
+
+// ─── Gift Card Quote Storage ─────────────────────────────────────────────────
+
+/// `side` and `card_type` cross the sqlx boundary as plain strings and come
+/// back through `FromStr`. A row whose `side` cannot be parsed is **skipped**
+/// rather than defaulted: `side` decides who funds escrow first and which way
+/// a silence timeout resolves, so guessing it would route someone's money the
+/// wrong way. The table's CHECK constraint means this should be unreachable —
+/// it is here so that if it ever happens the quote vanishes from the book
+/// instead of mis-settling.
+fn giftcard_quote_from_row(r: &sqlx::postgres::PgRow) -> Option<GiftCardQuote> {
+	let side_raw: String = r.get("side");
+	let card_type_raw: String = r.get("card_type");
+	let side = match GiftCardSide::from_str(&side_raw) {
+		Ok(s) => s,
+		Err(e) => {
+			tracing::error!(
+				quote_id = %r.get::<String, _>("id"),
+				error = %e,
+				"skipping gift card quote with unparseable side"
+			);
+			return None;
+		}
+	};
+	let card_type = match GiftCardType::from_str(&card_type_raw) {
+		Ok(t) => t,
+		Err(e) => {
+			tracing::error!(
+				quote_id = %r.get::<String, _>("id"),
+				error = %e,
+				"skipping gift card quote with unparseable card_type"
+			);
+			return None;
+		}
+	};
+
+	Some(GiftCardQuote {
+		id: r.get("id"),
+		solver_id: r.get("solver_id"),
+		side,
+		product_id: r.get("product_id"),
+		brand: r.get("brand"),
+		country_code: r.get("country_code"),
+		currency: r.get("currency"),
+		card_type,
+		face_decimals: r.get::<i16, _>("face_decimals") as u8,
+		min_face: r.get("min_face"),
+		max_face: r.get("max_face"),
+		quote: r.get("quote"),
+		fixed_cost: r.get("fixed_cost"),
+		payout_chain: r.get("payout_chain"),
+		payout_asset: r.get("payout_asset"),
+		payout_decimals: r.get::<i16, _>("payout_decimals") as u8,
+		expiry: r.get("expiry"),
+		exclusive_for: r.get("exclusive_for"),
+		paused: r.get("paused"),
+		created_at: r.get("created_at"),
+		updated_at: r.get("updated_at"),
+	})
+}
+
+#[async_trait]
+impl GiftCardQuoteStorageTrait for PostgresStore {
+	async fn create_giftcard_quote(&self, quote: GiftCardQuote) -> StorageResult<GiftCardQuote> {
+		sqlx::query(
+			"INSERT INTO giftcard_quotes \
+			 (id, solver_id, side, product_id, brand, country_code, currency, card_type, \
+			  face_decimals, min_face, max_face, quote, fixed_cost, payout_chain, \
+			  payout_asset, payout_decimals, expiry, exclusive_for, paused, created_at, updated_at) \
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)",
+		)
+		.bind(&quote.id)
+		.bind(&quote.solver_id)
+		.bind(quote.side.as_str())
+		.bind(quote.product_id)
+		.bind(&quote.brand)
+		.bind(&quote.country_code)
+		.bind(&quote.currency)
+		.bind(quote.card_type.as_str())
+		.bind(quote.face_decimals as i16)
+		.bind(&quote.min_face)
+		.bind(&quote.max_face)
+		.bind(&quote.quote)
+		.bind(&quote.fixed_cost)
+		.bind(&quote.payout_chain)
+		.bind(&quote.payout_asset)
+		.bind(quote.payout_decimals as i16)
+		.bind(&quote.expiry)
+		.bind(&quote.exclusive_for)
+		.bind(quote.paused)
+		.bind(quote.created_at)
+		.bind(quote.updated_at)
+		.execute(&self.pool)
+		.await
+		.map_err(|e| StorageError::Operation { message: e.to_string() })?;
+		Ok(quote)
+	}
+
+	async fn list_giftcard_quotes(
+		&self,
+		solver_id: Option<&str>,
+	) -> StorageResult<Vec<GiftCardQuote>> {
+		let rows = if let Some(sid) = solver_id {
+			sqlx::query(
+				"SELECT id, solver_id, side, product_id, brand, country_code, currency, card_type, \
+			 face_decimals, min_face, max_face, quote, fixed_cost, payout_chain, \
+			 payout_asset, payout_decimals, expiry, exclusive_for, paused, created_at, updated_at \
+				FROM giftcard_quotes WHERE solver_id = $1 ORDER BY created_at DESC",
+			)
+			.bind(sid)
+			.fetch_all(&self.pool)
+			.await
+			.map_err(|e| StorageError::Operation { message: e.to_string() })?
+		} else {
+			sqlx::query(
+				"SELECT id, solver_id, side, product_id, brand, country_code, currency, card_type, \
+			 face_decimals, min_face, max_face, quote, fixed_cost, payout_chain, \
+			 payout_asset, payout_decimals, expiry, exclusive_for, paused, created_at, updated_at \
+				FROM giftcard_quotes ORDER BY created_at DESC",
+			)
+			.fetch_all(&self.pool)
+			.await
+			.map_err(|e| StorageError::Operation { message: e.to_string() })?
+		};
+
+		Ok(rows.iter().filter_map(giftcard_quote_from_row).collect())
+	}
+
+	async fn delete_giftcard_quote(&self, id: &str) -> StorageResult<bool> {
+		let result = sqlx::query("DELETE FROM giftcard_quotes WHERE id = $1")
+			.bind(id)
+			.execute(&self.pool)
+			.await
+			.map_err(|e| StorageError::Operation { message: e.to_string() })?;
+		Ok(result.rows_affected() > 0)
+	}
+
+	async fn toggle_pause_giftcard_quote(
+		&self,
+		id: &str,
+	) -> StorageResult<Option<GiftCardQuote>> {
+		let row = sqlx::query(
+			"UPDATE giftcard_quotes SET paused = NOT paused, updated_at = now() \
+			WHERE id = $1 \
+			RETURNING id, solver_id, side, product_id, brand, country_code, currency, card_type, \
+			 face_decimals, min_face, max_face, quote, fixed_cost, payout_chain, \
+			 payout_asset, payout_decimals, expiry, exclusive_for, paused, created_at, updated_at",
+		)
+		.bind(id)
+		.fetch_optional(&self.pool)
+		.await
+		.map_err(|e| StorageError::Operation { message: e.to_string() })?;
+
+		Ok(row.as_ref().and_then(giftcard_quote_from_row))
+	}
+}
+
+// ─── Gift Card Trade Storage ─────────────────────────────────────────────────
+
+/// `side` and `state` cross the boundary as strings. A row that will not
+/// parse is skipped rather than defaulted, for the same reason as the quote
+/// reader: `side` decides who funds escrow and which way a timeout resolves,
+/// and `state` decides whether a deadline may fire at all. The CHECK
+/// constraints make this unreachable; if it ever happens the trade drops out
+/// of the resolver's view instead of being mis-settled.
+fn giftcard_trade_from_row(r: &sqlx::postgres::PgRow) -> Option<GiftCardTrade> {
+	let id: String = r.get("id");
+	let side = match GiftCardSide::from_str(&r.get::<String, _>("side")) {
+		Ok(v) => v,
+		Err(e) => {
+			tracing::error!(trade_id = %id, error = %e, "skipping trade with unparseable side");
+			return None;
+		}
+	};
+	let card_type = match GiftCardType::from_str(&r.get::<String, _>("card_type")) {
+		Ok(v) => v,
+		Err(e) => {
+			tracing::error!(trade_id = %id, error = %e, "skipping trade with unparseable card_type");
+			return None;
+		}
+	};
+	let state = match TradeState::from_str(&r.get::<String, _>("state")) {
+		Ok(v) => v,
+		Err(e) => {
+			tracing::error!(trade_id = %id, error = %e, "skipping trade with unparseable state");
+			return None;
+		}
+	};
+
+	// A malformed envelope is dropped rather than failing the read: the
+	// envelope is opaque to this process anyway, and losing the whole row
+	// would hide a live trade from its own participants.
+	let sealed_code = r
+		.get::<Option<serde_json::Value>, _>("sealed_code")
+		.and_then(|v| match serde_json::from_value::<SealedCode>(v) {
+			Ok(sc) => Some(sc),
+			Err(e) => {
+				tracing::error!(trade_id = %id, error = %e, "trade has an unreadable sealed_code envelope");
+				None
+			}
+		});
+
+	Some(GiftCardTrade {
+		id,
+		quote_id: r.get("quote_id"),
+		solver_id: r.get("solver_id"),
+		side,
+		brand: r.get("brand"),
+		country_code: r.get("country_code"),
+		currency: r.get("currency"),
+		card_type,
+		face_minor_units: r.get("face_minor_units"),
+		rate: r.get("rate"),
+		payout_chain: r.get("payout_chain"),
+		payout_asset: r.get("payout_asset"),
+		payout_minor_units: r.get("payout_minor_units"),
+		user_address: r.get("user_address"),
+		merchant_address: r.get("merchant_address"),
+		state,
+		recipient_pubkey: r.get("recipient_pubkey"),
+		code_commitment: r.get("code_commitment"),
+		sealed_code,
+		deadline_at: r.get("deadline_at"),
+		resolution_note: r.get("resolution_note"),
+		escrow_tx_hash: r.get("escrow_tx_hash"),
+		release_tx_hash: r.get("release_tx_hash"),
+		created_at: r.get("created_at"),
+		updated_at: r.get("updated_at"),
+	})
+}
+
+#[async_trait]
+impl GiftCardTradeStorageTrait for PostgresStore {
+	async fn create_giftcard_trade(&self, trade: GiftCardTrade) -> StorageResult<GiftCardTrade> {
+		let sealed = match &trade.sealed_code {
+			Some(sc) => Some(scrub_nul(
+				serde_json::to_value(sc)
+					.map_err(|e| StorageError::Operation { message: e.to_string() })?,
+			)),
+			None => None,
+		};
+
+		sqlx::query(
+			"INSERT INTO giftcard_trades \
+			 (id, quote_id, solver_id, side, brand, country_code, currency, card_type, \
+			  face_minor_units, rate, payout_chain, payout_asset, payout_minor_units, \
+			  user_address, merchant_address, state, recipient_pubkey, code_commitment, sealed_code, \
+			  deadline_at, resolution_note, escrow_tx_hash, release_tx_hash, created_at, updated_at) \
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)",
+		)
+		.bind(&trade.id)
+		.bind(&trade.quote_id)
+		.bind(&trade.solver_id)
+		.bind(trade.side.as_str())
+		.bind(&trade.brand)
+		.bind(&trade.country_code)
+		.bind(&trade.currency)
+		.bind(trade.card_type.as_str())
+		.bind(&trade.face_minor_units)
+		.bind(&trade.rate)
+		.bind(&trade.payout_chain)
+		.bind(&trade.payout_asset)
+		.bind(&trade.payout_minor_units)
+		.bind(&trade.user_address)
+		.bind(&trade.merchant_address)
+		.bind(trade.state.as_str())
+		.bind(&trade.recipient_pubkey)
+		.bind(&trade.code_commitment)
+		.bind(&sealed)
+		.bind(trade.deadline_at)
+		.bind(&trade.resolution_note)
+		.bind(&trade.escrow_tx_hash)
+		.bind(&trade.release_tx_hash)
+		.bind(trade.created_at)
+		.bind(trade.updated_at)
+		.execute(&self.pool)
+		.await
+		.map_err(|e| StorageError::Operation { message: e.to_string() })?;
+		Ok(trade)
+	}
+
+	async fn get_giftcard_trade(&self, id: &str) -> StorageResult<Option<GiftCardTrade>> {
+		let row = sqlx::query("SELECT id, quote_id, solver_id, side, brand, country_code, currency, card_type, \
+			 face_minor_units, rate, payout_chain, payout_asset, payout_minor_units, \
+			 user_address, merchant_address, state, recipient_pubkey, code_commitment, sealed_code, deadline_at, \
+			 resolution_note, escrow_tx_hash, release_tx_hash, created_at, updated_at FROM giftcard_trades WHERE id = $1")
+			.bind(id)
+			.fetch_optional(&self.pool)
+			.await
+			.map_err(|e| StorageError::Operation { message: e.to_string() })?;
+		Ok(row.as_ref().and_then(giftcard_trade_from_row))
+	}
+
+	async fn list_giftcard_trades(
+		&self,
+		solver_id: Option<&str>,
+		user_address: Option<&str>,
+	) -> StorageResult<Vec<GiftCardTrade>> {
+		// Both filters are optional and NULL means "don't filter", so one
+		// statement covers all four combinations rather than four branches
+		// that can drift apart.
+		let rows = sqlx::query(
+			"SELECT id, quote_id, solver_id, side, brand, country_code, currency, card_type, \
+			 face_minor_units, rate, payout_chain, payout_asset, payout_minor_units, \
+			 user_address, merchant_address, state, recipient_pubkey, code_commitment, sealed_code, deadline_at, \
+			 resolution_note, escrow_tx_hash, release_tx_hash, created_at, updated_at FROM giftcard_trades \
+			 WHERE ($1::text IS NULL OR solver_id = $1) \
+			   AND ($2::text IS NULL OR lower(user_address) = lower($2)) \
+			 ORDER BY created_at DESC",
+		)
+		.bind(solver_id)
+		.bind(user_address)
+		.fetch_all(&self.pool)
+		.await
+		.map_err(|e| StorageError::Operation { message: e.to_string() })?;
+
+		Ok(rows.iter().filter_map(giftcard_trade_from_row).collect())
+	}
+
+	async fn transition_giftcard_trade(
+		&self,
+		id: &str,
+		expected_state: &str,
+		update: GiftCardTradeUpdate,
+	) -> StorageResult<Option<GiftCardTrade>> {
+		let mut tx = self
+			.pool
+			.begin()
+			.await
+			.map_err(|e| StorageError::Operation { message: e.to_string() })?;
+
+		// The state guard is part of the UPDATE, not a prior SELECT: a
+		// check-then-write would let two actors both observe
+		// `awaiting_attestation` and both transition it, paying the escrow
+		// out twice. COALESCE keeps unset fields at their current values so a
+		// caller that only changes the state cannot blank the commitment.
+		let sealed = update.sealed_code.map(scrub_nul);
+		let row = sqlx::query(
+			"UPDATE giftcard_trades SET \
+			   state = $3, \
+			   deadline_at = $4, \
+			   resolution_note = COALESCE($5, resolution_note), \
+			   recipient_pubkey = COALESCE($10, recipient_pubkey), \
+			   code_commitment = COALESCE($6, code_commitment), \
+			   sealed_code = COALESCE($7, sealed_code), \
+			   escrow_tx_hash = COALESCE($8, escrow_tx_hash), \
+			   release_tx_hash = COALESCE($9, release_tx_hash), \
+			   updated_at = now() \
+			 WHERE id = $1 AND state = $2 \
+			 RETURNING id, quote_id, solver_id, side, brand, country_code, currency, card_type, \
+			 face_minor_units, rate, payout_chain, payout_asset, payout_minor_units, \
+			 user_address, merchant_address, state, recipient_pubkey, code_commitment, sealed_code, deadline_at, \
+			 resolution_note, escrow_tx_hash, release_tx_hash, created_at, updated_at",
+		)
+		.bind(id)
+		.bind(expected_state)
+		.bind(&update.state)
+		.bind(update.deadline_at)
+		.bind(&update.resolution_note)
+		.bind(&update.code_commitment)
+		.bind(&sealed)
+		.bind(&update.escrow_tx_hash)
+		.bind(&update.release_tx_hash)
+		.bind(&update.recipient_pubkey)
+		.fetch_optional(&mut *tx)
+		.await
+		.map_err(|e| StorageError::Operation { message: e.to_string() })?;
+
+		let Some(row) = row else {
+			// No row matched: either the id is unknown or someone else moved
+			// it first. Either way this caller's view is stale.
+			tx.rollback()
+				.await
+				.map_err(|e| StorageError::Operation { message: e.to_string() })?;
+			return Ok(None);
+		};
+
+		sqlx::query(
+			"INSERT INTO giftcard_trade_events (trade_id, from_state, to_state, actor, note) \
+			 VALUES ($1,$2,$3,$4,$5)",
+		)
+		.bind(id)
+		.bind(expected_state)
+		.bind(&update.state)
+		.bind(&update.actor)
+		.bind(update.resolution_note.as_deref().unwrap_or(""))
+		.execute(&mut *tx)
+		.await
+		.map_err(|e| StorageError::Operation { message: e.to_string() })?;
+
+		tx.commit()
+			.await
+			.map_err(|e| StorageError::Operation { message: e.to_string() })?;
+
+		Ok(giftcard_trade_from_row(&row))
+	}
+
+	async fn claim_due_trades(&self, limit: i64) -> StorageResult<Vec<GiftCardTrade>> {
+		// Read-only lease: the worker decides each trade's outcome in Rust and
+		// writes it back through `transition_giftcard_trade`, whose own state
+		// guard is what actually prevents a double payout. SKIP LOCKED here
+		// just stops two workers doing the same arithmetic at once.
+		let rows = sqlx::query(
+			"SELECT id, quote_id, solver_id, side, brand, country_code, currency, card_type, \
+			 face_minor_units, rate, payout_chain, payout_asset, payout_minor_units, \
+			 user_address, merchant_address, state, recipient_pubkey, code_commitment, sealed_code, deadline_at, \
+			 resolution_note, escrow_tx_hash, release_tx_hash, created_at, updated_at FROM giftcard_trades \
+			 WHERE deadline_at IS NOT NULL AND deadline_at <= now() \
+			   AND state IN ('awaiting_code', 'awaiting_attestation') \
+			 ORDER BY deadline_at \
+			 LIMIT $1 \
+			 FOR UPDATE SKIP LOCKED",
+		)
+		.bind(limit)
+		.fetch_all(&self.pool)
+		.await
+		.map_err(|e| StorageError::Operation { message: e.to_string() })?;
+
+		Ok(rows.iter().filter_map(giftcard_trade_from_row).collect())
+	}
+
+	async fn claim_unpaid_trades(&self, limit: i64) -> StorageResult<Vec<GiftCardTrade>> {
+		let rows = sqlx::query(
+			"SELECT id, quote_id, solver_id, side, brand, country_code, currency, card_type, \
+			 face_minor_units, rate, payout_chain, payout_asset, payout_minor_units, \
+			 user_address, merchant_address, state, recipient_pubkey, code_commitment, sealed_code, deadline_at, \
+			 resolution_note, escrow_tx_hash, release_tx_hash, created_at, updated_at FROM giftcard_trades \
+			 WHERE release_tx_hash IS NULL \
+			   AND state IN ('settled_to_card_sender', 'refunded_to_funder') \
+			 ORDER BY updated_at \
+			 LIMIT $1 \
+			 FOR UPDATE SKIP LOCKED",
+		)
+		.bind(limit)
+		.fetch_all(&self.pool)
+		.await
+		.map_err(|e| StorageError::Operation { message: e.to_string() })?;
+
+		Ok(rows.iter().filter_map(giftcard_trade_from_row).collect())
+	}
+
+	async fn mark_giftcard_trade_paid(
+		&self,
+		id: &str,
+		release_tx_hash: &str,
+	) -> StorageResult<bool> {
+		// The NULL guard is the idempotency key for payouts: two workers that
+		// both released would otherwise both record success, and the second
+		// release already reverted on-chain anyway.
+		let res = sqlx::query(
+			"UPDATE giftcard_trades SET release_tx_hash = $2, updated_at = now() \
+			 WHERE id = $1 AND release_tx_hash IS NULL",
+		)
+		.bind(id)
+		.bind(release_tx_hash)
+		.execute(&self.pool)
+		.await
+		.map_err(|e| StorageError::Operation { message: e.to_string() })?;
+		Ok(res.rows_affected() > 0)
 	}
 }
 

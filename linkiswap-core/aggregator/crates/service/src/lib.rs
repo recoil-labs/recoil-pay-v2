@@ -4,6 +4,11 @@
 
 pub mod aggregator;
 pub mod circuit_breaker;
+pub mod giftcard_escrow;
+pub mod giftcard_exposure;
+pub mod giftcard_payout;
+pub mod giftcard_ranker;
+pub mod giftcard_resolver;
 pub mod integrity;
 pub mod jobs;
 pub mod order;
@@ -17,6 +22,22 @@ pub use aggregator::{
 	TaskExecutor, TaskExecutorTrait,
 };
 pub use circuit_breaker::{CircuitBreakerService, CircuitBreakerTrait};
+pub use giftcard_exposure::{
+	Exposure, DEFAULT_EXPOSURE_MULTIPLE,
+};
+pub use giftcard_escrow::{
+	EscrowError, ExpectedLock, GiftCardEscrowClient, VerifiedLock,
+};
+pub use giftcard_payout::{
+	GiftCardPayoutWorker, PayoutPass, DEFAULT_PAYOUT_BATCH, DEFAULT_PAYOUT_INTERVAL_SECS,
+};
+pub use giftcard_resolver::{
+	GiftCardResolver, ResolverError, ResolverPass, DEFAULT_BATCH_SIZE, DEFAULT_INTERVAL_SECS,
+};
+pub use giftcard_ranker::{
+	GiftCardIntent, GiftCardRanker, GiftCardRankerError, GiftCardRankingResult,
+	ScoredGiftCardQuote,
+};
 
 #[cfg(test)]
 pub use aggregator::{MockAggregatorTrait, MockTaskExecutorTrait};

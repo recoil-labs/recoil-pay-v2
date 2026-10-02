@@ -987,8 +987,12 @@ mod tests {
 		}
 	}
 
+	/// Upstream solvers are optional: the aggregator's own operators are the
+	/// primary source of liquidity, and a deployment that has only them runs
+	/// in operator-only mode. This test used to assert the opposite, from
+	/// before that mode existed.
 	#[test]
-	fn test_validation_fails_without_solvers() {
+	fn test_validation_allows_no_upstream_solvers() {
 		let settings = Settings {
 			server: None,
 			solvers: HashMap::new(), // Empty solvers
@@ -1003,17 +1007,15 @@ mod tests {
 			circuit_breaker: None,
 		};
 
-		let result = settings.validate();
-		assert!(result.is_err());
-		if let Err(ConfigValidationError::MissingCriticalConfig { field }) = result {
-			assert_eq!(field, "solvers");
-		} else {
-			panic!("Expected MissingCriticalConfig error for solvers");
-		}
+		// Warns, does not fail — operator-only is a supported deployment.
+		assert!(settings.validate().is_ok());
 	}
 
+	/// Same reasoning as above: every upstream solver being disabled still
+	/// leaves operator liquidity, which is a working deployment rather than
+	/// a misconfiguration.
 	#[test]
-	fn test_validation_fails_without_enabled_solvers() {
+	fn test_validation_allows_all_upstream_solvers_disabled() {
 		let mut solvers = HashMap::new();
 		solvers.insert(
 			"test-solver".to_string(),
@@ -1044,14 +1046,28 @@ mod tests {
 			circuit_breaker: None,
 		};
 
-		let result = settings.validate();
-		assert!(result.is_err());
-		if let Err(ConfigValidationError::InvalidConfig { field, reason }) = result {
-			assert_eq!(field, "solvers");
-			assert!(reason.contains("No enabled solvers found"));
-		} else {
-			panic!("Expected InvalidConfig error for disabled solvers");
-		}
+		assert!(settings.validate().is_ok());
+	}
+
+	/// The one piece of config that genuinely is critical: without it every
+	/// signed request is unverifiable. It must keep failing even as the
+	/// solver requirements relax around it.
+	#[test]
+	fn test_validation_still_fails_without_the_critical_secret() {
+		let settings = Settings {
+			server: None,
+			solvers: HashMap::new(),
+			aggregation: None,
+			environment: None,
+			logging: None,
+			security: SecuritySettings {
+				integrity_secret: ConfigurableValue::from_env("DEFINITELY_NOT_SET_ANYWHERE_12345"),
+			},
+			maintenance: None,
+			metrics: None,
+			circuit_breaker: None,
+		};
+		assert!(settings.validate().is_err());
 	}
 
 	#[test]

@@ -7,6 +7,8 @@ pub mod adapters;
 pub mod auth;
 pub mod circuit_breaker;
 pub mod constants;
+pub mod giftcard_quotes;
+pub mod giftcard_trades;
 pub mod integrity;
 pub mod keygen;
 pub mod metrics;
@@ -80,6 +82,15 @@ pub use secrets::{Sealer, SealerError};
 
 pub use solver_quotes::SolverQuote;
 
+pub use giftcard_quotes::{
+	GiftCardQuote, GiftCardSide, GiftCardType, NewGiftCardQuote,
+};
+
+pub use giftcard_trades::{
+	GiftCardTrade, Party, SealedCode, TradeState, Transition, CODE_DELIVERY_WINDOW_MINS,
+	MERCHANT_ATTESTATION_WINDOW_MINS, USER_ATTESTATION_WINDOW_MINS,
+};
+
 // Operator model — drives reputation-aware push-quote ranking.
 pub use operators::{
 	Operator, DEFAULT_REPUTATION_SCORE, MAX_REPUTATION_SCORE, MIN_REPUTATION_SCORE,
@@ -87,7 +98,9 @@ pub use operators::{
 };
 
 pub use storage::{
-	MetricsStorageTrait, OperatorStorageTrait, OrderStorageTrait, SolverQuoteStorageTrait,
+	GiftCardQuoteStorageTrait, GiftCardTradeStorageTrait, GiftCardTradeUpdate,
+	MetricsStorageTrait, OperatorStorageTrait, OrderStorageTrait,
+	SolverQuoteStorageTrait,
 	SolverStorageTrait, StorageError, StorageResult, StorageTrait, VaultStorageTrait,
 };
 

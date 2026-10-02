@@ -289,8 +289,15 @@ pub async fn post_quotes_submit(
 	let mut count = 0;
 
 	for (i, q) in payload.quotes.into_iter().enumerate() {
-		for range in &q.ranges {
-			let id = format!("quote-{}-{}", now.timestamp_millis(), i);
+		// The id must carry the RANGE index as well as the quote index. It
+		// previously carried only `i`, which is constant across this inner
+		// loop, so every band of a multi-band quote generated the same
+		// primary key: the first band inserted and the rest failed on a
+		// unique violation that was logged and swallowed. A merchant
+		// publishing "$25-100 at 0.90, $100-500 at 0.88" kept only the
+		// first band and believed both were live.
+		for (j, range) in q.ranges.iter().enumerate() {
+			let id = format!("quote-{}-{}-{}", now.timestamp_millis(), i, j);
 			let expiry_ts = chrono::DateTime::from_timestamp(q.expiry as i64, 0)
 				.unwrap_or(now)
 				.to_rfc3339();

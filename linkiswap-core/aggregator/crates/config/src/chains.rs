@@ -65,6 +65,23 @@ pub struct ChainInfo {
 	/// Permit2 address (canonical on all chains, but kept per-chain so
 	/// a future chain with a non-canonical deployment still fits).
 	pub permit2: String,
+	/// `GiftCardEscrow` address on this chain, once deployed.
+	///
+	/// Empty until a deployment exists, and the gift card endpoints refuse
+	/// to advance a trade on a chain without one rather than pretending the
+	/// money moved. Separate from `input_settler` because the OIF escrow
+	/// cannot settle a gift card at all: it releases on proof of an on-chain
+	/// fill, and a gift card has no on-chain leg for such a proof to exist
+	/// about.
+	#[serde(default)]
+	pub giftcard_escrow: String,
+	/// `MerchantBond` address on this chain, once deployed.
+	///
+	/// Empty until then. Without it a dispute ruling has nothing to take, so
+	/// the exposure cap treats an unconfigured chain as zero bond rather
+	/// than as unlimited.
+	#[serde(default)]
+	pub merchant_bond: String,
 	pub tokens: Vec<TokenInfo>,
 }
 
@@ -128,6 +145,8 @@ impl ChainRegistry {
 				output_settler: "0xBE85Bb9ADb91D42fa148dE3a929BE1b9C46270A5".into(),
 				oracle: "0x309eAdeDfB7b7Da32b8714a9AA950c8B02924a8e".into(),
 				permit2: permit2.clone(),
+				giftcard_escrow: String::new(),
+				merchant_bond: String::new(),
 				tokens: vec![
 					usdc("0x191688B2Ff5Be8F0A5BCAB3E819C900a810FAaf6"),
 					TokenInfo {
@@ -145,6 +164,8 @@ impl ChainRegistry {
 				output_settler: "0x9EF00F018b4afDCAa89093EF3015E6D918a58003".into(),
 				oracle: "0x309eAdeDfB7b7Da32b8714a9AA950c8B02924a8e".into(),
 				permit2: permit2.clone(),
+				giftcard_escrow: String::new(),
+				merchant_bond: String::new(),
 				tokens: vec![usdc("0x73c83DAcc74bB8a704717AC09703b959E74b9705")],
 			},
 			ChainInfo {
@@ -155,6 +176,8 @@ impl ChainRegistry {
 				output_settler: "0x52602D7cc3D833F5d28ee6D01C7F82C9b2322e10".into(),
 				oracle: "0x306766B063383DF67035465BA883c46bBCf6254c".into(),
 				permit2: permit2.clone(),
+				giftcard_escrow: String::new(),
+				merchant_bond: String::new(),
 				tokens: vec![usdc("0x8c1963bA445dd562Da0B6c6fbCa070921B3fa8E6")],
 			},
 			ChainInfo {
@@ -165,6 +188,8 @@ impl ChainRegistry {
 				output_settler: "0x52602D7cc3D833F5d28ee6D01C7F82C9b2322e10".into(),
 				oracle: "0x306766B063383DF67035465BA883c46bBCf6254c".into(),
 				permit2,
+				giftcard_escrow: String::new(),
+				merchant_bond: String::new(),
 				tokens: vec![usdc("0x8c1963bA445dd562Da0B6c6fbCa070921B3fa8E6")],
 			},
 		])

@@ -1,6 +1,6 @@
 //! Storage traits for pluggable storage implementations
 
-use crate::{CircuitBreakerState, MetricsTimeSeries, Operator, Order, RollingMetrics, Solver, SolverQuote, StorageResult, VaultBalance};
+use crate::{CircuitBreakerState, GiftCardQuote, GiftCardTrade, MetricsTimeSeries, Operator, Order, RollingMetrics, Solver, SolverQuote, StorageResult, VaultBalance};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
@@ -94,6 +94,97 @@ pub trait SolverQuoteStorageTrait: Send + Sync {
 
 	/// Toggle the paused flag on a quote
 	async fn toggle_pause_solver_quote(&self, id: &str) -> StorageResult<Option<SolverQuote>>;
+}
+
+/// Trait for gift card quote inventory storage operations.
+///
+/// Deliberately a sibling of [`SolverQuoteStorageTrait`] rather than a
+/// generic over both: the two asset classes share a shape but not a
+/// settlement path, and collapsing them would mean every caller has to
+/// re-establish which kind of quote it is holding before it can act.
+#[async_trait]
+pub trait GiftCardQuoteStorageTrait: Send + Sync {
+	/// Persist a new gift card quote
+	async fn create_giftcard_quote(&self, quote: GiftCardQuote) -> StorageResult<GiftCardQuote>;
+
+	/// List all gift card quotes (optionally filtered by solver_id)
+	async fn list_giftcard_quotes(
+		&self,
+		solver_id: Option<&str>,
+	) -> StorageResult<Vec<GiftCardQuote>>;
+
+	/// Delete a gift card quote by ID
+	async fn delete_giftcard_quote(&self, id: &str) -> StorageResult<bool>;
+
+	/// Toggle the paused flag on a gift card quote
+	async fn toggle_pause_giftcard_quote(
+		&self,
+		id: &str,
+	) -> StorageResult<Option<GiftCardQuote>>;
+}
+
+/// Trait for gift card trade storage.
+///
+/// `claim_due_trades` is the resolver worker's entry point and mirrors the
+/// order claim queue: rows are leased with `FOR UPDATE SKIP LOCKED` so two
+/// workers cannot resolve the same trade twice. Double-resolving here would
+/// pay the escrow out twice, which is the one failure in this table that
+/// cannot be undone.
+#[async_trait]
+pub trait GiftCardTradeStorageTrait: Send + Sync {
+	async fn create_giftcard_trade(&self, trade: GiftCardTrade) -> StorageResult<GiftCardTrade>;
+
+	async fn get_giftcard_trade(&self, id: &str) -> StorageResult<Option<GiftCardTrade>>;
+
+	/// List trades, optionally scoped to one merchant or one user address.
+	async fn list_giftcard_trades(
+		&self,
+		solver_id: Option<&str>,
+		user_address: Option<&str>,
+	) -> StorageResult<Vec<GiftCardTrade>>;
+
+	/// Apply a transition. `expected_state` is checked in the same statement
+	/// as the write, so a concurrent actor cannot transition out from under
+	/// this one; `Ok(None)` means the row had moved on and the caller should
+	/// re-read rather than retry blindly.
+	async fn transition_giftcard_trade(
+		&self,
+		id: &str,
+		expected_state: &str,
+		update: GiftCardTradeUpdate,
+	) -> StorageResult<Option<GiftCardTrade>>;
+
+	/// Lease trades whose deadline has passed. Leased rows are hidden from
+	/// other callers for the duration of the transaction.
+	async fn claim_due_trades(&self, limit: i64) -> StorageResult<Vec<GiftCardTrade>>;
+
+	/// Trades that reached a paying terminal state but whose escrow has not
+	/// been released yet. The payout worker's queue.
+	async fn claim_unpaid_trades(&self, limit: i64) -> StorageResult<Vec<GiftCardTrade>>;
+
+	/// Record the release transaction. Guarded on `release_tx_hash` still
+	/// being NULL, so two workers cannot both pay the same trade out —
+	/// `Ok(false)` means somebody else already did.
+	async fn mark_giftcard_trade_paid(
+		&self,
+		id: &str,
+		release_tx_hash: &str,
+	) -> StorageResult<bool>;
+}
+
+/// The mutable part of a trade, for [`GiftCardTradeStorageTrait::transition_giftcard_trade`].
+#[derive(Debug, Clone, Default)]
+pub struct GiftCardTradeUpdate {
+	pub state: String,
+	pub deadline_at: Option<DateTime<Utc>>,
+	pub resolution_note: Option<String>,
+	pub code_commitment: Option<String>,
+	pub sealed_code: Option<serde_json::Value>,
+	pub recipient_pubkey: Option<String>,
+	pub escrow_tx_hash: Option<String>,
+	pub release_tx_hash: Option<String>,
+	/// Who caused this transition — recorded on the event row.
+	pub actor: String,
 }
 
 /// Trait for circuit breaker state storage operations
@@ -344,6 +435,8 @@ pub trait StorageTrait:
 	+ MetricsStorageTrait
 	+ CircuitBreakerStorageTrait
 	+ SolverQuoteStorageTrait
+	+ GiftCardQuoteStorageTrait
+	+ GiftCardTradeStorageTrait
 	+ OperatorStorageTrait
 	+ WorkerStorageTrait
 	+ VaultStorageTrait

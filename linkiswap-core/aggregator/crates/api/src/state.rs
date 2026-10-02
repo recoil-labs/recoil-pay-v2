@@ -16,6 +16,11 @@ pub struct AppState {
 	pub solver_service: Arc<dyn SolverServiceTrait>,
 	pub integrity_service: Arc<dyn IntegrityTrait>,
 	pub storage: Arc<dyn Storage>,
+	/// On-chain settlement for gift card trades. Present even when no
+	/// attestor key is configured — it reports itself disabled, and the
+	/// endpoints refuse trades rather than accepting ones they could never
+	/// pay out.
+	pub giftcard_escrow: Arc<oif_service::GiftCardEscrowClient>,
 	/// Background job processor for maintenance tasks
 	pub job_processor: Arc<JobProcessor>,
 
