@@ -84,6 +84,39 @@ async function api(path, init = {}) {
 
 const hex = (b) => `0x${Buffer.from(b).toString('hex')}`;
 
+/** Approve `spender` for at least `want`, and do not return until a read
+ *  actually observes it.
+ *
+ *  Waiting for the approve receipt is not enough. Public RPCs are load
+ *  balanced, so the next call can land on a node that has not seen that
+ *  block yet, read the allowance as zero, and revert — which surfaces as
+ *  `TransferFailed()` from inside the contract and looks like a contract
+ *  bug rather than a stale read. */
+async function approveAndConfirm(token, spender, want, label) {
+  const current = await pub.readContract({
+    address: token, abi: ERC20, functionName: 'allowance', args: [merchant.address, spender],
+  });
+  if (current >= want) {
+    ok(`${label} already approved`);
+    return;
+  }
+
+  const tx = await merchantWallet.writeContract({
+    address: token, abi: ERC20, functionName: 'approve', args: [spender, want],
+  });
+  await pub.waitForTransactionReceipt({ hash: tx });
+  ok(`approved ${label} ${tx}`);
+
+  for (let i = 0; i < 20; i++) {
+    const seen = await pub.readContract({
+      address: token, abi: ERC20, functionName: 'allowance', args: [merchant.address, spender],
+    });
+    if (seen >= want) return;
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  die(`approved ${label} but no RPC read reflected it after 60s`);
+}
+
 /** The derived encryption keypair, and the disclosure proving it is theirs.
  *  Two signatures: the derivation one never leaves this process. */
 function encryptionIdentity(account, privKey, tradeId) {
@@ -172,17 +205,7 @@ const bondNow = await pub.readContract({
 });
 if (bondNow < BOND_MAJOR * unit) {
   const want = BOND_MAJOR * unit;
-  const allowance = await pub.readContract({
-    address: usdc.address, abi: ERC20, functionName: 'allowance',
-    args: [merchant.address, chain.merchant_bond],
-  });
-  if (allowance < want) {
-    const tx = await merchantWallet.writeContract({
-      address: usdc.address, abi: ERC20, functionName: 'approve', args: [chain.merchant_bond, want],
-    });
-    await pub.waitForTransactionReceipt({ hash: tx });
-    ok(`approved ${tx}`);
-  }
+  await approveAndConfirm(usdc.address, chain.merchant_bond, want, 'bond');
   const tx = await merchantWallet.writeContract({
     address: chain.merchant_bond, abi: BOND, functionName: 'deposit',
     args: [merchant.address, usdc.address, want],
@@ -241,17 +264,7 @@ if (trade.funder !== 'merchant') die(`expected the merchant to fund a buy-side t
 say('Merchant locks escrow');
 const tradeKey = keccak256(toBytes(trade.id));
 const amount = BigInt(trade.payoutMinorUnits);
-const esAllow = await pub.readContract({
-  address: usdc.address, abi: ERC20, functionName: 'allowance',
-  args: [merchant.address, chain.giftcard_escrow],
-});
-if (esAllow < amount) {
-  const tx = await merchantWallet.writeContract({
-    address: usdc.address, abi: ERC20, functionName: 'approve', args: [chain.giftcard_escrow, amount],
-  });
-  await pub.waitForTransactionReceipt({ hash: tx });
-  ok(`approved ${tx}`);
-}
+await approveAndConfirm(usdc.address, chain.giftcard_escrow, amount, 'escrow');
 const lockTx = await merchantWallet.writeContract({
   address: chain.giftcard_escrow, abi: ESCROW, functionName: 'lock',
   args: [tradeKey, usdc.address, amount, user.address],
