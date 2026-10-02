@@ -177,11 +177,11 @@ Then set the attestor key on the aggregator and redeploy it:
   railway variables --set "GIFTCARD_ATTESTOR_KEY=$DEPLOY_PRIVATE_KEY" \
     -s aggregator -p recoilpay -e production
 
-  # Upload root must be linkiswap-core: the service's own rootDirectory is
+  # Upload root must be recoil-core: the service's own rootDirectory is
   # "aggregator", so pointing --path-as-root at the aggregator directory
   # makes Railway look for aggregator/aggregator, fall back to Railpack and
   # fail in prepare with no useful message.
-  cd ../.. && railway up linkiswap-core --path-as-root -s aggregator -d
+  cd ../.. && railway up recoil-core --path-as-root -s aggregator -d
 
 The boot log should show 'gift card escrow attestor loaded' and
 'gift card payout worker started'. Paste it back and I'll check it.

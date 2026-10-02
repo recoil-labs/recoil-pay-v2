@@ -22,7 +22,7 @@ Then check:
 
 - https://www.npmjs.com/package/@recoilpay/intent-core (and `-react`, `-widget`)
 - https://cdn.jsdelivr.net/npm/@recoilpay/intent-widget@0.1/dist/recoilpay-intent-widget.js loads. It's the URL the docs give partners.
-- Remove the **"Availability"** note from `linkiswap-core/docs-site/docs/integrate/drop-in-ui.md` and deploy the docs.
+- Remove the **"Availability"** note from `recoil-core/docs-site/docs/integrate/drop-in-ui.md` and deploy the docs.
 
 ## Every change after that
 

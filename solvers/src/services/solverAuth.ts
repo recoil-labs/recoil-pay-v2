@@ -21,8 +21,8 @@ export interface SolverLoginResult {
   user: SolverOperatorUser;
 }
 
-const TOKEN_KEY = 'linkiswap_solver_token';
-const OPERATOR_KEY = 'linkiswap_solver_operator';
+const TOKEN_KEY = 'recoilpay_solver_token';
+const OPERATOR_KEY = 'recoilpay_solver_operator';
 
 const BASE = ''; // Vite proxy routes to localhost:4000
 

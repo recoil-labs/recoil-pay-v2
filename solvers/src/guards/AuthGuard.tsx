@@ -13,7 +13,7 @@ import { SolverApiService } from '../services/solverApi';
  * pass without the user being authenticated in any meaningful sense.
  *
  * The new rule: pass if and only if the operator's per-row
- * `linkiswap_solver_api_key` is present in localStorage. The
+ * `recoilpay_solver_api_key` is present in localStorage. The
  * `ConnectPage` (mounted at `/connect`) is where the wallet actually
  * signs in. We do **not** verify the key here — the user might
  * briefly land on a guarded route before `ConnectPage` finishes

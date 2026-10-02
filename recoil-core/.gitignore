@@ -1,0 +1,16 @@
+**/target/
+**/node_modules/
+**/dist/
+**/data/
+**/.oif-demo/
+**/.docusaurus/
+**/build/
+*.log
+.env
+/recoil-website-v2/
+# Local dev artifacts (kept out of git so Render builds are clean)
+/aggregator/test
+/aggregator/test.rs
+/aggregator/test_load.rs
+/solvers.db
+

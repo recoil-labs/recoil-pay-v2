@@ -5,8 +5,8 @@ intent UI, the solver operator portal, and the tag reservation site.
 
 | Directory               | What it is                                          | Stack              |
 |-------------------------|-----------------------------------------------------|--------------------|
-| `linkiswap-core/`       | Aggregator, fill worker, solver, Solana settler     | Rust + Anchor      |
-| `linkiswap-website-v2/` | Intent UI — natural-language swap entry             | React + Vite       |
+| `recoil-core/`       | Aggregator, fill worker, solver, Solana settler     | Rust + Anchor      |
+| `recoil-website-v2/` | Intent UI — natural-language swap entry             | React + Vite       |
 | `solvers/`              | Solver operator portal — onboarding, quotes, orders | React + Vite       |
 | `recoilpay-tags/`       | Tag reservation site (tags.recoilpay.com) — standalone, shares only the brand | React + Vite, Hono + Postgres |
 | `recoilpay-intent-kit/` | Embeddable intent SDK — `@recoilpay/intent-core` (headless flow), `@recoilpay/intent-react` (drop-in component), `@recoilpay/intent-widget` (script-tag embed for any site) | TypeScript |
@@ -39,8 +39,8 @@ fire-and-forget broadcast silently dropped orders.
 ## Local development
 
 ```sh
-cd linkiswap-core/aggregator && cargo build
-cd linkiswap-website-v2      && npm install --legacy-peer-deps && npm run dev
+cd recoil-core/aggregator && cargo build
+cd recoil-website-v2      && npm install --legacy-peer-deps && npm run dev
 cd solvers                   && npm install && npm run dev
 cd recoilpay-tags            && npm install && npm run dev:api   # then npm run dev:web
 cd recoilpay-intent-kit      && npm install && npm test

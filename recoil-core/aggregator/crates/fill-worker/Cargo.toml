@@ -1,0 +1,73 @@
+[package]
+name = "fill-worker"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.91.0"
+license = "MIT"
+authors = ["RecoilPay Team"]
+description = "Operator fill-worker — subscribes to aggregator-signed orders and broadcasts on-chain fills"
+
+[[bin]]
+name = "fill-worker"
+path = "src/main.rs"
+
+[dependencies]
+# Aggregator types (for order shape)
+oif-types = { path = "../types" }
+
+# Async runtime + HTTP
+tokio = { version = "1.40", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# Local HTTP control plane (identity store + dashboard sync)
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Async traits
+async-trait = "0.1"
+
+# OS entropy for the nonce generator in `auth::sign_request`. Avoids
+# pulling `rand_core` so we don't have to worry about version coupling
+# with the rest of the workspace's `rand = "0.9"` setup.
+getrandom = "0.2"
+
+# EVM signing + RPC. Real alloy-backed signer so fills survive on-chain
+# ecrecover checks. Pinned to versions known to work with rustc 1.91+.
+alloy-primitives = { version = "1.0", features = ["std", "serde"] }
+alloy-signer = { version = "1.0", features = ["eip712"] }
+alloy-signer-local = "1.0"
+alloy-provider = { version = "1.0", features = ["rpc-api"] }
+alloy-rpc-types = "1.0"
+alloy-rpc-types-eth = "1.0"
+alloy-consensus = { version = "1.0", features = ["serde", "k256"] }
+alloy-network = { version = "1.0" }
+alloy-transport-http = { version = "1.0", features = ["reqwest-rustls-tls"] }
+alloy-sol-types = { version = "1.0", features = ["json"] }
+alloy-eips = "1.0"
+
+# Logging + errors
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "1.0"
+
+# WebSocket client for the live order feed (`/ws/orders`). Uses
+# tokio-tungstenite over rustls to match the rest of the workspace's
+# TLS posture (we already pull `rustls-tls` for reqwest).
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }
+futures-util = "0.3"
+
+# Config
+dotenvy = "0.15"
+clap = { version = "4.5", features = ["derive"] }
+
+# Random key generation for the worker bootstrap identity.
+rand = "0.8"
+
+# Hex encoding for EIP-191 signature bytes.
+hex = "0.4"
+
+# Release profile is inherited from the workspace root
+# (`recoil-core/aggregator/Cargo.toml`).

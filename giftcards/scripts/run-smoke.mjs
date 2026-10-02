@@ -3,7 +3,7 @@
  * Bundles first because the test imports @noble from this package, and node
  * cannot resolve those from a bare script. Start the aggregator with:
  *
- *   cd ../linkiswap-core/aggregator
+ *   cd ../recoil-core/aggregator
  *   INTEGRITY_SECRET=local FILL_WALLET_ENCRYPTION_KEY="$(openssl rand -base64 32)" cargo run
  *
  * then `npm run smoke`.

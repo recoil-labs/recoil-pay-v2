@@ -49,7 +49,7 @@ export const useLogout = () => {
             // Without this, refreshing the page would still pass the
             // AuthGuard with a stale token.
             try {
-                localStorage.removeItem('linkiswap_solver_api_key');
+                localStorage.removeItem('recoilpay_solver_api_key');
                 localStorage.removeItem('auth_token');
             } catch {
                 // localStorage can throw in private-browsing contexts;

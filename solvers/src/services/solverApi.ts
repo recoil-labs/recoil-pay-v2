@@ -242,13 +242,13 @@ export interface DeleteSettlementContractResponseDto {
 }
 
 const STORAGE_KEYS = {
-  IDENTITIES: 'linkiswap_solver_identities',
-  CONTRACTS: 'linkiswap_solver_contracts',
-  QUOTES: 'linkiswap_solver_quotes',
-  TELEMETRY: 'linkiswap_solver_telemetry',
-  VAULTS: 'linkiswap_solver_vaults',
-  API_KEY: 'linkiswap_solver_api_key',
-  BASE_URL: 'linkiswap_solver_base_url',
+  IDENTITIES: 'recoilpay_solver_identities',
+  CONTRACTS: 'recoilpay_solver_contracts',
+  QUOTES: 'recoilpay_solver_quotes',
+  TELEMETRY: 'recoilpay_solver_telemetry',
+  VAULTS: 'recoilpay_solver_vaults',
+  API_KEY: 'recoilpay_solver_api_key',
+  BASE_URL: 'recoilpay_solver_base_url',
 };
 
 // No DEFAULT_* constants — all data comes from the aggregator API (localhost:4000 via Vite proxy).
@@ -338,7 +338,7 @@ export class SolverApiService {
     // The aggregator surfaces this key in the `register` response and
     // then uses it on every subsequent request to look the operator up
     // (via `operators.api_key`). The previous hardcoded admin key
-    // `linkiswap_admin_2026` is gone — each operator has a unique key.
+    // `the old shared admin key` is gone — each operator has a unique key.
     //
     // Returns the empty string when no key has been persisted yet so
     // `fetch` calls fail with a clear 401 instead of confusing the

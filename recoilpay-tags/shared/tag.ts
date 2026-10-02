@@ -34,7 +34,7 @@ export function validateTag(tag: string): TagValidity {
  */
 export const RESERVED_TAGS: ReadonlySet<string> = new Set([
   // RecoilPay and system words
-  'recoil', 'recoilpay', 'recoil_pay', 'linkiswap', 'admin', 'administrator', 'root', 'system',
+  'recoil', 'recoilpay', 'recoil_pay', 'recoilpay', 'admin', 'administrator', 'root', 'system',
   'support', 'help', 'helpdesk', 'official', 'team', 'staff', 'security', 'verify', 'verified',
   'api', 'www', 'app', 'tags', 'tag', 'claim', 'reserve', 'send', 'pay', 'wallet', 'solver',
   'null', 'undefined', 'anonymous', 'everyone', 'here', 'mod', 'moderator', 'test',

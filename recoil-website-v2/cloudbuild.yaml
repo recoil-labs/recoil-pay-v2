@@ -1,0 +1,52 @@
+# Cloud Build config for the V2 intent UI.
+#
+# VITE_* values are baked into the bundle at build time, so they are
+# build args rather than Cloud Run env vars.
+#
+# The aggregator URL points at the marketplace aggregator on Cloud Run.
+# The previous Render blueprint pointed at oif-aggregator, the retired
+# standalone OIF stack, which returned 503 for every quote request.
+
+substitutions:
+  _AGGREGATOR_URL: https://recoil-aggregator-675174162902.us-central1.run.app
+  # Public client identifiers — they ship inside the bundle either way.
+  _WALLETCONNECT_PROJECT_ID: e0a1b3a2a85284ebdca25f4bbdab1efe
+  _GHOST_API_URL: https://blog.recoilpay.com
+  _GHOST_CONTENT_KEY: b7b8a55d27339a0bf9fe906c10
+
+# The Hugging Face token is pulled from Secret Manager rather than kept
+# in this file, which is committed. Note that it is still a build arg
+# feeding a VITE_* variable, so it lands in the public bundle regardless
+# — Secret Manager only keeps it out of the repo and out of the build
+# substitution record.
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/VITE_HF_ACCESS_TOKEN/versions/latest
+      env: HF_TOKEN
+
+steps:
+  # bash entrypoint rather than plain docker args: secretEnv values are
+  # only expanded inside a shell, not in an args list.
+  - name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    secretEnv:
+      - HF_TOKEN
+    args:
+      - -c
+      - |
+        docker build \
+          --build-arg=VITE_OIF_API_BASE_URL=${_AGGREGATOR_URL} \
+          --build-arg=VITE_WALLETCONNECT_PROJECT_ID=${_WALLETCONNECT_PROJECT_ID} \
+          --build-arg=VITE_GHOST_API_URL=${_GHOST_API_URL} \
+          --build-arg=VITE_GHOST_CONTENT_KEY=${_GHOST_CONTENT_KEY} \
+          --build-arg=VITE_HF_ACCESS_TOKEN="$$HF_TOKEN" \
+          -t us-central1-docker.pkg.dev/$PROJECT_ID/recoil/website-v2:latest \
+          .
+
+images:
+  - us-central1-docker.pkg.dev/$PROJECT_ID/recoil/website-v2:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1800s
