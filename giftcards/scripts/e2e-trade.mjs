@@ -21,7 +21,7 @@
 
 import { createPublicClient, createWalletClient, http, keccak256, toBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { baseSepolia } from 'viem/chains';
+import { baseSepolia, bscTestnet, optimismSepolia, polygonAmoy, sepolia } from 'viem/chains';
 import { secp256k1 } from '@noble/curves/secp256k1';
 
 import {
@@ -35,7 +35,24 @@ import {
 } from '../src/crypto/sealedCode.ts';
 
 const BASE = process.env.SMOKE_BASE ?? 'https://api.recoilpay.com';
-const CHAIN = baseSepolia;
+
+/** Which chain to settle on. The aggregator decides what it supports; this
+ *  only has to name one of them, and the RPC comes from its registry rather
+ *  than from viem's default — the registry is what the aggregator itself
+ *  uses, so a run here exercises the same endpoint settlement will. */
+const CHAINS_BY_ID = {
+  84532: baseSepolia,
+  11155420: optimismSepolia,
+  97: bscTestnet,
+  80002: polygonAmoy,
+  11155111: sepolia,
+};
+const CHAIN_ID = Number(process.env.CHAIN_ID ?? 84532);
+const CHAIN = CHAINS_BY_ID[CHAIN_ID];
+if (!CHAIN) {
+  console.error(`CHAIN_ID ${CHAIN_ID} is not one of: ${Object.keys(CHAINS_BY_ID).join(', ')}`);
+  process.exit(1);
+}
 const BRAND = 'Amazon';
 const COUNTRY = 'US';
 const FACE_MINOR = 10_000n; // $100.00 in cents
@@ -144,9 +161,19 @@ if (merchant.address.toLowerCase() === user.address.toLowerCase()) {
   die('MERCHANT_KEY and USER_KEY must be different wallets — lock() reverts SamePartyTwice');
 }
 
-const pub = createPublicClient({ chain: CHAIN, transport: http() });
-const merchantWallet = createWalletClient({ account: merchant, chain: CHAIN, transport: http() });
-const userWallet = createWalletClient({ account: user, chain: CHAIN, transport: http() });
+// Read the registry first: the clients below use the aggregator's own RPC
+// rather than viem's default, so a green run here means the endpoint
+// settlement depends on is actually working — not merely that some public
+// node somewhere is.
+const chains = (await api('/api/v1/chains')).body?.data ?? [];
+const chain = chains.find((c) => c.chain_id === CHAIN_ID);
+if (!chain) die(`the aggregator does not serve chain ${CHAIN_ID}`);
+if (!chain.giftcard_escrow) die(`no gift card escrow configured on ${chain.name}`);
+
+const transport = http(chain.rpc_url);
+const pub = createPublicClient({ chain: CHAIN, transport });
+const merchantWallet = createWalletClient({ account: merchant, chain: CHAIN, transport });
+const userWallet = createWalletClient({ account: user, chain: CHAIN, transport });
 
 /** Which direction to run: `buy` (the merchant buys, a user sells a card),
  *  `sell` (the merchant sells, a user buys one), or `both`.
@@ -161,10 +188,7 @@ console.log(`user     ${user.address}`);
 console.log(`api      ${BASE}`);
 
 // ── 1. chain registry ────────────────────────────────────────────────────
-say('Reading the chain registry');
-const chains = (await api('/api/v1/chains')).body?.data ?? [];
-const chain = chains.find((c) => c.chain_id === CHAIN.id);
-if (!chain?.giftcard_escrow) die(`no gift card escrow configured on ${CHAIN.name}`);
+say(`Settling on ${chain.name}`, `rpc ${chain.rpc_url}`);
 const usdc = chain.tokens.find((t) => t.symbol === 'USDC');
 if (!usdc) die('no USDC on this chain');
 ok(`escrow ${chain.giftcard_escrow}`);
