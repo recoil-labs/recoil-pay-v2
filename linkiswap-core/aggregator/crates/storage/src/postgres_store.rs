@@ -1167,7 +1167,7 @@ impl GiftCardTradeStorageTrait for PostgresStore {
 			  face_minor_units, rate, payout_chain, payout_asset, payout_minor_units, \
 			  user_address, merchant_address, state, recipient_pubkey, code_commitment, sealed_code, \
 			  deadline_at, resolution_note, escrow_tx_hash, release_tx_hash, created_at, updated_at) \
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)",
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)",
 		)
 		.bind(&trade.id)
 		.bind(&trade.quote_id)
@@ -1875,5 +1875,114 @@ fn row_to_operator(r: sqlx::postgres::PgRow) -> Operator {
 			.unwrap_or_default(),
 		created_at: r.get("created_at"),
 		updated_at: r.get("updated_at"),
+	}
+}
+
+#[cfg(test)]
+mod insert_shape_tests {
+	/// Every `INSERT` in this file must name as many value expressions as it
+	/// does columns.
+	///
+	/// This exists because a real one did not. `create_giftcard_trade` grew a
+	/// `card_type` column and a matching `.bind`, but its `VALUES` list kept
+	/// 24 placeholders for 25 columns. Postgres rejected it at runtime with
+	/// "INSERT has more target columns than expressions" — in production,
+	/// because every storage test here runs against the in-memory store and
+	/// never sees this SQL at all.
+	///
+	/// Counting expressions rather than `$n` placeholders matters: several
+	/// statements legitimately pass `now()` for a column, so a placeholder
+	/// count alone reports false mismatches.
+	const SOURCE: &str = include_str!("postgres_store.rs");
+
+	/// Rust string literals here wrap lines with a trailing backslash; undo
+	/// that so the SQL is one line before parsing it.
+	fn unwrap_continuations(sql: &str) -> String {
+		let mut out = String::with_capacity(sql.len());
+		let mut chars = sql.chars().peekable();
+		while let Some(c) = chars.next() {
+			if c == '\\' && chars.peek() == Some(&'\n') {
+				chars.next();
+				while chars.peek().is_some_and(|c| c.is_whitespace()) {
+					chars.next();
+				}
+				out.push(' ');
+			} else {
+				out.push(c);
+			}
+		}
+		out
+	}
+
+	/// Split on top-level commas, ignoring those nested in parentheses — a
+	/// value like `coalesce(a, b)` is one expression, not two.
+	fn count_items(list: &str) -> usize {
+		let (mut depth, mut items, mut seen) = (0i32, 1usize, false);
+		for c in list.chars() {
+			match c {
+				'(' => depth += 1,
+				')' => depth -= 1,
+				',' if depth == 0 => items += 1,
+				c if !c.is_whitespace() => seen = true,
+				_ => {},
+			}
+		}
+		if seen { items } else { 0 }
+	}
+
+	/// The parenthesised group starting at or after `from`.
+	fn group_after(hay: &str, from: usize) -> Option<(String, usize)> {
+		let open = hay[from..].find('(')? + from;
+		let (mut depth, mut end) = (0i32, open);
+		for (i, c) in hay[open..].char_indices() {
+			match c {
+				'(' => depth += 1,
+				')' => {
+					depth -= 1;
+					if depth == 0 {
+						end = open + i;
+						break;
+					}
+				},
+				_ => {},
+			}
+		}
+		Some((hay[open + 1..end].to_string(), end))
+	}
+
+	#[test]
+	fn every_insert_has_one_expression_per_column() {
+		let sql = unwrap_continuations(SOURCE);
+		let mut checked = 0;
+
+		for (idx, _) in sql.match_indices("INSERT INTO ") {
+			let after = idx + "INSERT INTO ".len();
+			let table: String = sql[after..]
+				.chars()
+				.take_while(|c| c.is_alphanumeric() || *c == '_')
+				.collect();
+
+			// This test reads its own source, which contains the search
+			// string itself; those matches have no table name.
+			if table.is_empty() {
+				continue;
+			}
+
+			let Some((columns, cols_end)) = group_after(&sql, after) else { continue };
+			let Some(values_at) = sql[cols_end..].find("VALUES") else { continue };
+			let Some((values, _)) = group_after(&sql, cols_end + values_at) else { continue };
+
+			let n_cols = count_items(&columns);
+			let n_vals = count_items(&values);
+			assert_eq!(
+				n_cols, n_vals,
+				"INSERT INTO {table}: {n_cols} columns but {n_vals} value expressions"
+			);
+			checked += 1;
+		}
+
+		// If the parser silently matches nothing, the test passes while
+		// guarding nothing.
+		assert!(checked >= 8, "expected to check several INSERTs, checked {checked}");
 	}
 }
