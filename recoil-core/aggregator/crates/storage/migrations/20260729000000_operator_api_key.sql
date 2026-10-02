@@ -1,7 +1,7 @@
 -- Per-operator dashboard API key.
 --
 -- The previous design used a single hardcoded admin key
--- (`the old shared admin key`) shared by every dashboard instance. That
+-- (`linkiswap_admin_2026`) shared by every dashboard instance. That
 -- meant anyone with the dashboard source could read/write any
 -- operator's data on the aggregator. This column gives each operator
 -- its own 32-byte hex API key, generated server-side at registration
