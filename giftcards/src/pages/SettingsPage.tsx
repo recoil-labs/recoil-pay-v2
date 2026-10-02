@@ -3,6 +3,7 @@ import { useAccount } from 'wagmi';
 import { MerchantApi, getSolverId, type OperatorSummary } from '../api/merchantApi';
 import { useAuthStore } from '../stores/auth-store';
 import { Button, Card, CardHeader, Field, inputClass } from '../components/ui';
+import { StakeBond } from '../components/LockEscrow';
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
@@ -34,6 +35,19 @@ export function SettingsPage() {
           label="Fill wallet"
           value={operator?.fillWalletAddress ?? '—'}
         />
+      </Card>
+
+      {/* A merchant with no stake has zero capacity and every trade against
+          them is refused, so this is the first thing a new merchant needs.
+          Placed above the aggregator settings for that reason. */}
+      <Card>
+        <CardHeader
+          title="Your bond"
+          detail="What backs your promises. Without it you cannot take trades."
+        />
+        <div className="px-5 py-5">
+          <StakeBond payoutChain="eip155:84532" payoutAsset="USDC" />
+        </div>
       </Card>
 
       <Card>

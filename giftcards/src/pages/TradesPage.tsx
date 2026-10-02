@@ -5,6 +5,7 @@ import { Button, Card, CardHeader, EmptyState, Field, Pill, inputClass } from '.
 import { commitToCode, sealCode } from '../crypto/sealedCode';
 import { useEncryptionKey } from '../crypto/useEncryptionKey';
 import { RevealCode } from '../components/RevealCode';
+import { LockEscrow } from '../components/LockEscrow';
 import { fromMinorUnits, ratePercent } from '../types/giftcards';
 import {
   STATE_COPY,
@@ -156,51 +157,33 @@ function Attestation({ trade, onDone }: { trade: Trade; onDone: () => void }) {
 
 function EscrowFunding({ trade, onDone }: { trade: Trade; onDone: () => void }) {
   const { discloseFor } = useEncryptionKey();
-  const [txHash, setTxHash] = useState('');
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function confirm() {
-    setBusy(true);
+  async function submit(txHash: string) {
     setError(null);
     try {
-      // Not the wallet key: a separate encryption key derived from a wallet
-      // signature, because no wallet will hand a page its private key and a
-      // code sealed to one could never be opened. `discloseFor` also signs
-      // the proof the server checks.
+      // Publishing the encryption key is what lets the seller seal their
+      // code to you. Done after the lock lands, so abandoning the
+      // transaction leaves nothing half-committed.
       const { publicKey, signature } = await discloseFor(trade.id);
-
       await MerchantApi.markEscrowFunded(trade.id, {
-        txHash: txHash.trim(),
+        txHash,
         recipientPubkey: publicKey,
         keySignature: signature,
       });
       onDone();
     } catch (e) {
-      setError(e instanceof ApiError || e instanceof Error ? e.message : 'could not confirm escrow');
-    } finally {
-      setBusy(false);
+      setError(
+        e instanceof ApiError || e instanceof Error ? e.message : 'could not confirm escrow',
+      );
+      throw e;
     }
   }
 
   return (
     <div className="flex flex-col gap-3">
-      <Field
-        label="Escrow transaction hash"
-        hint="Signing also publishes the key the seller encrypts the code to."
-        error={error ?? undefined}
-      >
-        <input
-          className={inputClass}
-          value={txHash}
-          onChange={(e) => setTxHash(e.target.value)}
-          placeholder="0x…"
-          spellCheck={false}
-        />
-      </Field>
-      <Button onClick={confirm} disabled={busy || txHash.trim() === ''}>
-        {busy ? 'Confirming…' : 'Confirm escrow'}
-      </Button>
+      <LockEscrow trade={trade} onFunded={submit} />
+      {error && <p className="text-[12px] text-danger">{error}</p>}
     </div>
   );
 }

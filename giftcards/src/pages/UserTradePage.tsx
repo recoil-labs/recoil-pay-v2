@@ -8,6 +8,7 @@ import { Button, Card, CardHeader, Field, Pill, inputClass } from '../components
 import { commitToCode, sealCode } from '../crypto/sealedCode';
 import { useEncryptionKey } from '../crypto/useEncryptionKey';
 import { RevealCode } from '../components/RevealCode';
+import { LockEscrow } from '../components/LockEscrow';
 import { fromMinorUnits, ratePercent } from '../types/giftcards';
 import { STATE_COPY, isTerminal, minutesLeft, type Trade } from '../types/trades';
 
@@ -48,22 +49,20 @@ function Countdown({ trade }: { trade: Trade }) {
 function FundEscrow({ trade, onDone }: { trade: Trade; onDone: () => void }) {
   const sign = useTradeSignature(trade.id);
   const { discloseFor } = useEncryptionKey();
-  const [txHash, setTxHash] = useState('');
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function submit() {
-    setBusy(true);
+  // Called once the lock is mined. Publishing the encryption key happens
+  // here rather than before, so a person who abandons the transaction is
+  // not left having signed things for a trade that never funded.
+  async function submit(txHash: string) {
     setError(null);
     try {
       // Not the wallet key: a separate encryption key derived from a wallet
       // signature, because no wallet hands a page its private key and a code
-      // sealed to one could never be opened. `discloseFor` also signs the
-      // proof the server checks.
+      // sealed to one could never be opened.
       const { publicKey, signature: keySignature } = await discloseFor(trade.id);
-
       await UserApi.markEscrowFunded(trade.id, {
-        txHash: txHash.trim(),
+        txHash,
         recipientPubkey: publicKey,
         keySignature,
         signature: await sign(),
@@ -71,35 +70,22 @@ function FundEscrow({ trade, onDone }: { trade: Trade; onDone: () => void }) {
       onDone();
     } catch (e) {
       const msg = e instanceof UserApiError || e instanceof Error ? e.message : 'could not confirm';
+      // The lock is already on-chain at this point, so this is recoverable:
+      // the escrow is theirs and refunds after the backstop delay even if
+      // they never get past this screen.
       setError(
         e instanceof UserApiError && e.status === 202
-          ? 'That transaction has not been mined yet — try again in a moment.'
+          ? 'Your lock is still being mined. Give it a moment and try again — your funds are already in escrow.'
           : msg,
       );
-    } finally {
-      setBusy(false);
+      throw e;
     }
   }
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-[13px] leading-relaxed text-secondary">
-        Lock {fromMinorUnits(trade.payoutMinorUnits, 6)} {trade.payoutAsset} into the escrow
-        contract, then paste the transaction hash. We check on-chain that it is really
-        there before anything else happens.
-      </p>
-      <Field label="Escrow transaction hash" error={error ?? undefined}>
-        <input
-          className={inputClass}
-          value={txHash}
-          onChange={(e) => setTxHash(e.target.value)}
-          placeholder="0x…"
-          spellCheck={false}
-        />
-      </Field>
-      <Button onClick={submit} disabled={busy || txHash.trim() === ''}>
-        {busy ? 'Verifying…' : 'Confirm escrow'}
-      </Button>
+      <LockEscrow trade={trade} onFunded={submit} />
+      {error && <p className="text-[12px] text-danger">{error}</p>}
     </div>
   );
 }

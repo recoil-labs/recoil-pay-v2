@@ -42,6 +42,9 @@ export interface Trade {
   payoutAsset: string;
   payoutMinorUnits: string;
   userAddress: string;
+  /** The merchant's payout address, frozen at match time — the escrow
+   *  releases only to the two addresses the lock names. */
+  merchantAddress: string;
   state: TradeState;
   /** The key the code must be sealed to. Present once escrow is funded. */
   recipientPubkey: string | null;
