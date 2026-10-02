@@ -208,7 +208,10 @@ mod tests {
 			card_type: oif_types::GiftCardType::Ecode,
 			face_minor_units: "10000".into(),
 			rate: "0.88".into(),
-			payout_chain: "eip155:84532".into(),
+			// A chain with no escrow deployed, so every release attempt
+			// fails — which is what lets these tests exercise the queue
+			// without a chain.
+			payout_chain: "eip155:11155111".into(),
 			payout_asset: "USDC".into(),
 			payout_minor_units: "88000000".into(),
 			user_address: "0x0000000000000000000000000000000000000001".into(),

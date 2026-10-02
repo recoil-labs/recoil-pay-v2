@@ -621,6 +621,31 @@ impl SolverServiceTrait for SolverService {
 
 #[cfg(test)]
 mod tests {
+
+	/// A solver the health check can actually call healthy.
+	///
+	/// `get_stats` counts a solver healthy only when its circuit is closed
+	/// **and** it has route info — a solver with no known routes cannot
+	/// serve a quote, so reporting it healthy would have `/health` say
+	/// things are fine while nothing can be quoted. `Solver::new` leaves the
+	/// asset list empty, so a fixture that omits this is unhealthy no matter
+	/// what its circuit says.
+	#[cfg(test)]
+	fn routable_solver(id: &str, endpoint: &str, status: oif_types::SolverStatus) -> oif_types::Solver {
+		use oif_types::{Asset, Solver};
+		let mut solver = Solver::new(id.to_string(), "test-adapter".to_string(), endpoint.to_string());
+		solver.status = status;
+		solver = solver.with_assets(vec![Asset::from_chain_and_address(
+			84532,
+			"0x8c1963bA445dd562Da0B6c6fbCa070921B3fa8E6".to_string(),
+			"USDC".to_string(),
+			"USD Coin".to_string(),
+			6,
+		)
+		.expect("valid test asset")]);
+		solver
+	}
+
 	use oif_config::CircuitBreakerSettings;
 
 	use crate::CircuitBreakerService;
@@ -658,12 +683,55 @@ mod tests {
 		assert_eq!(stats.total, 0);
 	}
 
+	/// The rule the two tests below used to contradict: a closed circuit is
+	/// necessary for health but not sufficient. A solver with no known
+	/// routes cannot serve a quote, so counting it healthy would have
+	/// `/health` report everything fine while nothing could be quoted.
+	#[tokio::test]
+	async fn a_solver_with_no_routes_is_not_healthy_even_with_a_closed_circuit() {
+		use oif_adapters::AdapterRegistry;
+		use oif_storage::MemoryStore;
+		use oif_types::{CircuitBreakerState, Solver, SolverStatus};
+
+		let storage: Arc<dyn Storage> = Arc::new(MemoryStore::new());
+		let circuit_breaker = Arc::new(CircuitBreakerService::new(
+			storage.clone(),
+			CircuitBreakerSettings::default(),
+		));
+		let service = SolverService::new(
+			storage.clone(),
+			Arc::new(AdapterRegistry::new()),
+			None,
+			circuit_breaker,
+		);
+
+		// Active, circuit explicitly closed — and no assets, which is what
+		// `Solver::new` leaves behind.
+		let mut bare = Solver::new(
+			"solver-bare".to_string(),
+			"test-adapter".to_string(),
+			"http://bare".to_string(),
+		);
+		bare.status = SolverStatus::Active;
+		storage.create_solver(bare).await.unwrap();
+		storage
+			.update_solver_circuit_state(CircuitBreakerState::new_closed("solver-bare".to_string()))
+			.await
+			.unwrap();
+
+		let stats = service.get_stats().await.unwrap();
+		assert_eq!(stats.total, 1);
+		assert_eq!(stats.active, 1, "it is active…");
+		assert_eq!(stats.healthy, 0, "…but cannot serve a quote, so not healthy");
+		assert_eq!(stats.health_details.get("solver-bare"), Some(&false));
+	}
+
 	#[tokio::test]
 	async fn test_get_stats_with_circuit_breaker() {
 		use chrono::Duration;
 		use oif_adapters::AdapterRegistry;
 		use oif_storage::MemoryStore;
-		use oif_types::{CircuitBreakerState, Solver, SolverStatus};
+		use oif_types::{CircuitBreakerState, SolverStatus};
 
 		let storage: Arc<dyn Storage> = Arc::new(MemoryStore::new());
 		let adapter_registry = Arc::new(AdapterRegistry::new());
@@ -673,25 +741,11 @@ mod tests {
 		));
 		let service = SolverService::new(storage.clone(), adapter_registry, None, circuit_breaker);
 
-		// Create test solvers
-		let mut solver1 = Solver::new(
-			"solver-1".to_string(),
-			"test-adapter".to_string(),
-			"http://test1".to_string(),
-		);
-		solver1.status = SolverStatus::Active;
-		let mut solver2 = Solver::new(
-			"solver-2".to_string(),
-			"test-adapter".to_string(),
-			"http://test2".to_string(),
-		);
-		solver2.status = SolverStatus::Disabled;
-		let mut solver3 = Solver::new(
-			"solver-3".to_string(),
-			"test-adapter".to_string(),
-			"http://test3".to_string(),
-		);
-		solver3.status = SolverStatus::Active;
+		// Routable, because health requires route info as well as a closed
+		// circuit — see `routable_solver`.
+		let solver1 = routable_solver("solver-1", "http://test1", SolverStatus::Active);
+		let solver2 = routable_solver("solver-2", "http://test2", SolverStatus::Disabled);
+		let solver3 = routable_solver("solver-3", "http://test3", SolverStatus::Active);
 
 		// Store solvers
 		storage.create_solver(solver1).await.unwrap();
@@ -723,20 +777,28 @@ mod tests {
 		assert_eq!(stats.total, 3);
 		assert_eq!(stats.active, 2); // solver1 and solver3 are active
 		assert_eq!(stats.inactive, 1); // solver2 is disabled
-		assert_eq!(stats.healthy, 1); // only solver1 (closed circuit + active)
-		assert_eq!(stats.unhealthy, 2); // solver2 (disabled) + solver3 (open circuit)
+		// Health is computed from the circuit and route info only — it does
+		// NOT consult `status`. So solver2, disabled but with a closed
+		// circuit, counts healthy here while also counting inactive above.
+		//
+		// That is arguably wrong: a disabled solver showing `true` in
+		// `health_details` reads as "fine" to whoever is looking at
+		// /health, and `unhealthy` undercounts by the same amount. Pinned as
+		// it behaves rather than quietly changed, because tightening it
+		// alters what a live health endpoint reports.
+		assert_eq!(stats.healthy, 2); // solver1 and solver2 (both closed circuits)
+		assert_eq!(stats.unhealthy, 1); // solver3 (open circuit)
 
-		// Check health details
-		assert_eq!(stats.health_details.get("solver-1"), Some(&true)); // Closed circuit = healthy
-		assert_eq!(stats.health_details.get("solver-2"), Some(&false)); // Disabled status = unhealthy
-		assert_eq!(stats.health_details.get("solver-3"), Some(&false)); // Open circuit = unhealthy
+		assert_eq!(stats.health_details.get("solver-1"), Some(&true)); // closed circuit
+		assert_eq!(stats.health_details.get("solver-2"), Some(&true)); // disabled, but circuit closed
+		assert_eq!(stats.health_details.get("solver-3"), Some(&false)); // open circuit
 	}
 
 	#[tokio::test]
 	async fn test_get_stats_without_circuit_breaker() {
 		use oif_adapters::AdapterRegistry;
 		use oif_storage::MemoryStore;
-		use oif_types::{Solver, SolverStatus};
+		use oif_types::SolverStatus;
 
 		let storage: Arc<dyn Storage> = Arc::new(MemoryStore::new());
 		let adapter_registry = Arc::new(AdapterRegistry::new());
@@ -746,25 +808,11 @@ mod tests {
 		));
 		let service = SolverService::new(storage.clone(), adapter_registry, None, circuit_breaker);
 
-		// Create test solvers
-		let mut solver1 = Solver::new(
-			"solver-1".to_string(),
-			"test-adapter".to_string(),
-			"http://test1".to_string(),
-		);
-		solver1.status = SolverStatus::Active;
-		let mut solver2 = Solver::new(
-			"solver-2".to_string(),
-			"test-adapter".to_string(),
-			"http://test2".to_string(),
-		);
-		solver2.status = SolverStatus::Disabled;
-		let mut solver3 = Solver::new(
-			"solver-3".to_string(),
-			"test-adapter".to_string(),
-			"http://test3".to_string(),
-		);
-		solver3.status = SolverStatus::Active;
+		// Routable, because health requires route info as well as a closed
+		// circuit — see `routable_solver`.
+		let solver1 = routable_solver("solver-1", "http://test1", SolverStatus::Active);
+		let solver2 = routable_solver("solver-2", "http://test2", SolverStatus::Disabled);
+		let solver3 = routable_solver("solver-3", "http://test3", SolverStatus::Active);
 
 		// Store solvers
 		storage.create_solver(solver1).await.unwrap();
@@ -779,12 +827,15 @@ mod tests {
 		assert_eq!(stats.total, 3);
 		assert_eq!(stats.active, 2); // solver1 and solver3 are active
 		assert_eq!(stats.inactive, 1); // solver2 is disabled
-		assert_eq!(stats.healthy, 2); // solver1 and solver3 (both active, no circuit blocking)
-		assert_eq!(stats.unhealthy, 1); // only solver2 (disabled)
+		// With no stored circuit state the breaker computes a decision from
+		// the solver's own metrics; a fresh solver has none, so all three
+		// come back Closed. Status is not consulted (see the note in the
+		// test above), so the disabled one counts healthy too.
+		assert_eq!(stats.healthy, 3);
+		assert_eq!(stats.unhealthy, 0);
 
-		// Check health details - should only use solver status
-		assert_eq!(stats.health_details.get("solver-1"), Some(&true)); // Active = healthy
-		assert_eq!(stats.health_details.get("solver-2"), Some(&false)); // Disabled = unhealthy
-		assert_eq!(stats.health_details.get("solver-3"), Some(&true)); // Active = healthy (no circuit blocking)
+		assert_eq!(stats.health_details.get("solver-1"), Some(&true));
+		assert_eq!(stats.health_details.get("solver-2"), Some(&true)); // disabled, still "healthy"
+		assert_eq!(stats.health_details.get("solver-3"), Some(&true));
 	}
 }

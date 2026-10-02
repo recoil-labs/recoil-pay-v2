@@ -431,14 +431,18 @@ mod tests {
 		assert!(!GiftCardEscrowClient::new(registry(), Some("   ")).is_enabled());
 	}
 
+	/// A chain the registry knows but has no contracts on. Eth Sepolia is
+	/// deliberately left unconfigured; naming a deployed chain here would
+	/// make this test pass for the wrong reason the moment someone deployed
+	/// to it, which is exactly what happened to its first version.
+	const UNCONFIGURED_CHAIN: &str = "eip155:11155111";
+
 	#[tokio::test]
 	async fn a_chain_without_a_deployed_escrow_is_refused() {
-		// The built-in registry ships with no escrow addresses, so every
-		// chain should refuse until one is deployed and configured. This is
-		// the guard that stops a trade advancing against nothing.
+		// The guard that stops a trade advancing against nothing.
 		let client = GiftCardEscrowClient::new(registry(), None);
 		let err = client
-			.is_open("eip155:84532", "gct-1")
+			.is_open(UNCONFIGURED_CHAIN, "gct-1")
 			.await
 			.expect_err("should refuse without a deployment");
 		assert!(matches!(err, EscrowError::NoEscrowOnChain(_)), "{err}");
@@ -448,7 +452,11 @@ mod tests {
 	async fn a_chain_without_a_deployed_bond_is_refused() {
 		let client = GiftCardEscrowClient::new(registry(), None);
 		let err = client
-			.available_bond("eip155:84532", "0x0000000000000000000000000000000000000001", "USDC")
+			.available_bond(
+				UNCONFIGURED_CHAIN,
+				"0x0000000000000000000000000000000000000001",
+				"0x0000000000000000000000000000000000000002",
+			)
 			.await
 			.expect_err("should refuse without a bond deployment");
 		assert!(matches!(err, EscrowError::NoBondOnChain(_)), "{err}");
@@ -459,7 +467,7 @@ mod tests {
 		let client = GiftCardEscrowClient::new(registry(), None);
 		let err = client
 			.propose_slash(
-				"eip155:84532",
+				UNCONFIGURED_CHAIN,
 				"0x0000000000000000000000000000000000000001",
 				"0x0000000000000000000000000000000000000002",
 				U256::from(1u64),
@@ -485,7 +493,7 @@ mod tests {
 	async fn releasing_without_a_key_fails_before_touching_the_chain() {
 		let client = GiftCardEscrowClient::new(registry(), None);
 		let err = client
-			.release("eip155:84532", "gct-1", "0x0000000000000000000000000000000000000001")
+			.release(UNCONFIGURED_CHAIN, "gct-1", "0x0000000000000000000000000000000000000001")
 			.await
 			.expect_err("should refuse without an attestor");
 		assert!(matches!(err, EscrowError::NoAttestorKey), "{err}");

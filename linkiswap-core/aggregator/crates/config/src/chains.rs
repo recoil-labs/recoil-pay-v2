@@ -145,8 +145,8 @@ impl ChainRegistry {
 				output_settler: "0xBE85Bb9ADb91D42fa148dE3a929BE1b9C46270A5".into(),
 				oracle: "0x309eAdeDfB7b7Da32b8714a9AA950c8B02924a8e".into(),
 				permit2: permit2.clone(),
-				giftcard_escrow: String::new(),
-				merchant_bond: String::new(),
+				giftcard_escrow: "0x7F766f90d1aBDcb06c388D45773BA1e135ca328c".into(),
+				merchant_bond: "0x17f45dF091f361B7a882639F2279Da190DFf4D56".into(),
 				tokens: vec![
 					usdc("0x191688B2Ff5Be8F0A5BCAB3E819C900a810FAaf6"),
 					TokenInfo {
@@ -164,8 +164,8 @@ impl ChainRegistry {
 				output_settler: "0x9EF00F018b4afDCAa89093EF3015E6D918a58003".into(),
 				oracle: "0x309eAdeDfB7b7Da32b8714a9AA950c8B02924a8e".into(),
 				permit2: permit2.clone(),
-				giftcard_escrow: String::new(),
-				merchant_bond: String::new(),
+				giftcard_escrow: "0x344A4A33abCBc7D3197a112791194C62826569CB".into(),
+				merchant_bond: "0xeD362305045782954328F3a26286bA9562F0aAeA".into(),
 				tokens: vec![usdc("0x73c83DAcc74bB8a704717AC09703b959E74b9705")],
 			},
 			ChainInfo {
@@ -303,6 +303,54 @@ impl ChainRegistry {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	/// A gift card address that is set must be a real address, and one that
+	/// is not set must be empty rather than a placeholder.
+	///
+	/// Both halves matter. A malformed address fails at settlement time,
+	/// after a user has already handed over a card. An empty one is the
+	/// signal the escrow client uses to refuse a chain outright, so a
+	/// plausible-looking dummy would turn "we cannot settle here" into
+	/// "we tried to settle and the call reverted".
+	#[test]
+	fn giftcard_addresses_are_either_a_real_address_or_absent() {
+		let reg = ChainRegistry::testnet_default();
+		for chain in reg.iter() {
+			for (label, addr) in
+				[("escrow", &chain.giftcard_escrow), ("bond", &chain.merchant_bond)]
+			{
+				if addr.is_empty() {
+					continue;
+				}
+				assert!(
+					addr.starts_with("0x") && addr.len() == 42,
+					"{} {label} is not a 20-byte address: {addr}",
+					chain.name
+				);
+				assert!(
+					addr[2..].chars().all(|c| c.is_ascii_hexdigit()),
+					"{} {label} is not hex: {addr}",
+					chain.name
+				);
+			}
+		}
+	}
+
+	/// The two are deployed together and read together: the exposure cap
+	/// consults the bond before a trade opens, and settlement consults the
+	/// escrow after. A chain with only one would accept trades it cannot
+	/// enforce rulings on, or refuse every trade on a chain that can settle.
+	#[test]
+	fn a_chain_has_both_giftcard_contracts_or_neither() {
+		for chain in ChainRegistry::testnet_default().iter() {
+			assert_eq!(
+				chain.giftcard_escrow.is_empty(),
+				chain.merchant_bond.is_empty(),
+				"{} has one gift card contract configured but not the other",
+				chain.name
+			);
+		}
+	}
 
 	#[test]
 	fn testnet_default_has_all_four_chains() {
