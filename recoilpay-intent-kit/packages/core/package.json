@@ -1,6 +1,6 @@
 {
   "name": "@recoilpay/intent-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Headless RecoilPay intent flow: parse plain English, quote across solvers, sign, submit and track — no UI, no framework.",
   "keywords": [
     "recoilpay",

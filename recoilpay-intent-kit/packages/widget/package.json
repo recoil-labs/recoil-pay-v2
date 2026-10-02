@@ -1,6 +1,6 @@
 {
   "name": "@recoilpay/intent-widget",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "RecoilPay intents for any website: one script tag, a <recoilpay-intent> element, wallet connection included.",
   "keywords": [
     "recoilpay",
@@ -35,8 +35,8 @@
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
-    "@recoilpay/intent-core": "^0.1.0",
-    "@recoilpay/intent-react": "^0.1.0",
+    "@recoilpay/intent-core": "^0.2.0",
+    "@recoilpay/intent-react": "^0.2.0",
     "@testing-library/react": "^16.3.3",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
