@@ -53,6 +53,8 @@ const die = (msg) => {
 const ERC20 = [
   { type: 'function', name: 'approve', stateMutability: 'nonpayable',
     inputs: [{ name: 's', type: 'address' }, { name: 'a', type: 'uint256' }], outputs: [{ type: 'bool' }] },
+  { type: 'function', name: 'transfer', stateMutability: 'nonpayable',
+    inputs: [{ name: 't', type: 'address' }, { name: 'a', type: 'uint256' }], outputs: [{ type: 'bool' }] },
   { type: 'function', name: 'balanceOf', stateMutability: 'view',
     inputs: [{ name: 'a', type: 'address' }], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'allowance', stateMutability: 'view',
@@ -92,16 +94,16 @@ const hex = (b) => `0x${Buffer.from(b).toString('hex')}`;
  *  block yet, read the allowance as zero, and revert — which surfaces as
  *  `TransferFailed()` from inside the contract and looks like a contract
  *  bug rather than a stale read. */
-async function approveAndConfirm(token, spender, want, label) {
+async function approveAndConfirm(wallet, owner, token, spender, want, label) {
   const current = await pub.readContract({
-    address: token, abi: ERC20, functionName: 'allowance', args: [merchant.address, spender],
+    address: token, abi: ERC20, functionName: 'allowance', args: [owner, spender],
   });
   if (current >= want) {
     ok(`${label} already approved`);
     return;
   }
 
-  const tx = await merchantWallet.writeContract({
+  const tx = await wallet.writeContract({
     address: token, abi: ERC20, functionName: 'approve', args: [spender, want],
   });
   await pub.waitForTransactionReceipt({ hash: tx });
@@ -109,7 +111,7 @@ async function approveAndConfirm(token, spender, want, label) {
 
   for (let i = 0; i < 20; i++) {
     const seen = await pub.readContract({
-      address: token, abi: ERC20, functionName: 'allowance', args: [merchant.address, spender],
+      address: token, abi: ERC20, functionName: 'allowance', args: [owner, spender],
     });
     if (seen >= want) return;
     await new Promise((r) => setTimeout(r, 3000));
@@ -119,11 +121,11 @@ async function approveAndConfirm(token, spender, want, label) {
 
 /** The derived encryption keypair, and the disclosure proving it is theirs.
  *  Two signatures: the derivation one never leaves this process. */
-function encryptionIdentity(account, privKey, tradeId) {
+function encryptionIdentity(_unused, privKey, tradeId) {
   const derivationSig = signEip191(KEY_DERIVATION_MESSAGE, privKey);
   const { privateKey, publicKey } = deriveEncryptionKeypair(derivationSig);
   const keySignature = signEip191(pubkeyDisclosureMessage(tradeId, publicKey), privKey);
-  return { privateKey, publicKey, keySignature, address: account.address };
+  return { privateKey, publicKey, keySignature };
 }
 
 function signEip191(message, privKeyHex) {
@@ -144,6 +146,15 @@ if (merchant.address.toLowerCase() === user.address.toLowerCase()) {
 
 const pub = createPublicClient({ chain: CHAIN, transport: http() });
 const merchantWallet = createWalletClient({ account: merchant, chain: CHAIN, transport: http() });
+const userWallet = createWalletClient({ account: user, chain: CHAIN, transport: http() });
+
+/** Which direction to run: `buy` (the merchant buys, a user sells a card),
+ *  `sell` (the merchant sells, a user buys one), or `both`.
+ *
+ *  Worth running both: the two directions swap who funds escrow, who hands
+ *  over the code and who attests, so almost nothing about the settlement
+ *  path is shared between them. */
+const DIRECTION = (process.env.DIRECTION ?? 'both').toLowerCase();
 
 console.log(`merchant ${merchant.address}`);
 console.log(`user     ${user.address}`);
@@ -165,22 +176,23 @@ const payout = (FACE_MINOR * BigInt(Math.round(Number(RATE) * 1e6)) * unit) / (1
 
 // ── 2. gas + balance ─────────────────────────────────────────────────────
 say('Checking balances');
-// Only the funder transacts. This is the merchant-buys direction, so the
-// merchant approves, stakes, and locks, while the user signs messages
-// off-chain and receives the payout — they never send a transaction and
-// need no gas at all. Requiring it from them would turn an empty throwaway
-// wallet into a blocker for no reason.
+// Only the funder transacts, and which party that is flips with direction:
+// the merchant funds a buy, the user funds a sell. The merchant always
+// needs gas — it stakes the bond either way — and tops the user up when a
+// sell run needs it, rather than making someone fund a second wallet by
+// hand mid-test.
 const gas = await pub.getBalance({ address: merchant.address });
 if (gas === 0n) die(`merchant ${merchant.address} has no ${CHAIN.name} ETH for gas`);
 ok(`merchant gas ${gas} wei`);
-ok(`user needs no gas — it only signs and receives`);
 const usdcBal = await pub.readContract({
   address: usdc.address, abi: ERC20, functionName: 'balanceOf', args: [merchant.address],
 });
 ok(`merchant USDC ${usdcBal}`);
-const needed = BOND_MAJOR * unit + payout;
+// Worst case: the bond, the buy-side escrow, and twice the sell-side
+// escrow (the top-up sends double so a re-run does not need another).
+const needed = BOND_MAJOR * unit + payout * 3n;
 if (usdcBal < needed) {
-  die(`merchant needs ${needed} USDC units (bond ${BOND_MAJOR * unit} + escrow ${payout}), has ${usdcBal}`);
+  die(`merchant needs ${needed} USDC units (bond ${BOND_MAJOR * unit} + escrow ${payout} + user top-up ${payout * 2n}), has ${usdcBal}`);
 }
 
 // ── 3. register the merchant ─────────────────────────────────────────────
@@ -205,7 +217,7 @@ const bondNow = await pub.readContract({
 });
 if (bondNow < BOND_MAJOR * unit) {
   const want = BOND_MAJOR * unit;
-  await approveAndConfirm(usdc.address, chain.merchant_bond, want, 'bond');
+  await approveAndConfirm(merchantWallet, merchant.address, usdc.address, chain.merchant_bond, want, 'bond');
   const tx = await merchantWallet.writeContract({
     address: chain.merchant_bond, abi: BOND, functionName: 'deposit',
     args: [merchant.address, usdc.address, want],
@@ -216,140 +228,199 @@ if (bondNow < BOND_MAJOR * unit) {
   ok(`already staked ${bondNow}`);
 }
 
-// ── 5. publish a buy rate ────────────────────────────────────────────────
-say('Publishing a buy rate', `${BRAND} ${COUNTRY} $25–$500 at ${Number(RATE) * 100}%`);
-const submit = await api('/solver-api/giftcard-quotes/submit', {
-  method: 'POST',
-  headers: { 'x-api-key': apiKey },
-  body: JSON.stringify({
-    solverId,
-    quotes: [{
-      side: 'buy', brand: BRAND, countryCode: COUNTRY, currency: 'USD', cardType: 'ecode',
-      expiry: Math.floor(Date.now() / 1000) + 3600,
-      payoutChain: `eip155:${CHAIN.id}`, payoutAsset: 'USDC',
-      ranges: [{ minFace: '2500', maxFace: '50000', quote: RATE }],
-    }],
-  }),
-});
-if (submit.body?.quotesAdded !== 1) die(`publish failed: ${JSON.stringify(submit.body)}`);
-ok('published');
+// ── one complete trade, in whichever direction ───────────────────────────
+//
+// Nothing below branches on `side` to decide who does what. The trade itself
+// reports `cardSender`, `cardReceiver` and `funder`, and every step is driven
+// off those — the same way both UIs do it. A flow that re-derived the roles
+// from `side` would be a second place to get the asymmetry wrong.
+async function runTrade(side) {
+  const userIsSelling = side === 'buy'; // a merchant BUY quote fills a seller
+  console.log(`\n${'═'.repeat(64)}`);
+  console.log(`  ${side === 'buy' ? 'MERCHANT BUYS — a user sells a card' : 'MERCHANT SELLS — a user buys a card'}`);
+  console.log('═'.repeat(64));
 
-// ── 6. user ranks and opens a trade ──────────────────────────────────────
-say('User searches for a rate');
-const ranked = await api('/api/v1/giftcard-quotes/rank', {
-  method: 'POST',
-  body: JSON.stringify({
-    userIsSelling: true, brand: BRAND, countryCode: COUNTRY, cardType: 'ecode',
-    faceMinorUnits: FACE_MINOR.toString(), userAddress: user.address,
-  }),
-});
-const offer = (ranked.body?.data ?? []).find((o) => o.solverId === solverId);
-if (!offer) die(`our quote did not rank: ${JSON.stringify(ranked.body)}`);
-ok(`offered ${offer.payoutMinorUnits} USDC units at ${offer.rate}`);
+  say('Publishing a rate', `${side} ${BRAND} ${COUNTRY} $25–$500 at ${Number(RATE) * 100}%`);
+  const submit = await api('/solver-api/giftcard-quotes/submit', {
+    method: 'POST',
+    headers: { 'x-api-key': apiKey },
+    body: JSON.stringify({
+      solverId,
+      quotes: [{
+        side, brand: BRAND, countryCode: COUNTRY, currency: 'USD', cardType: 'ecode',
+        expiry: Math.floor(Date.now() / 1000) + 3600,
+        payoutChain: `eip155:${CHAIN.id}`, payoutAsset: 'USDC',
+        ranges: [{ minFace: '2500', maxFace: '50000', quote: RATE }],
+      }],
+    }),
+  });
+  if (submit.body?.quotesAdded !== 1) die(`publish failed: ${JSON.stringify(submit.body)}`);
+  ok('published');
 
-say('Opening the trade');
-const opened = await api('/api/v1/giftcard-trades', {
-  method: 'POST',
-  body: JSON.stringify({
-    quoteId: offer.quoteId, faceMinorUnits: FACE_MINOR.toString(), userAddress: user.address,
-  }),
-});
-if (opened.status !== 201) die(`open failed: ${opened.status} ${JSON.stringify(opened.body)}`);
-const trade = opened.body.data;
-ok(`${trade.id}  state=${trade.state}`);
-ok(`card sender ${trade.cardSender}, funder ${trade.funder}`);
-if (trade.funder !== 'merchant') die(`expected the merchant to fund a buy-side trade, got ${trade.funder}`);
+  say('User searches');
+  const ranked = await api('/api/v1/giftcard-quotes/rank', {
+    method: 'POST',
+    body: JSON.stringify({
+      userIsSelling, brand: BRAND, countryCode: COUNTRY, cardType: 'ecode',
+      faceMinorUnits: FACE_MINOR.toString(), userAddress: user.address,
+    }),
+  });
+  const offer = (ranked.body?.data ?? []).find((o) => o.solverId === solverId);
+  if (!offer) die(`our quote did not rank: ${JSON.stringify(ranked.body)}`);
+  ok(`${userIsSelling ? 'would receive' : 'would pay'} ${offer.payoutMinorUnits} USDC units`);
 
-// ── 7. merchant locks escrow ─────────────────────────────────────────────
-say('Merchant locks escrow');
-const tradeKey = keccak256(toBytes(trade.id));
-const amount = BigInt(trade.payoutMinorUnits);
-await approveAndConfirm(usdc.address, chain.giftcard_escrow, amount, 'escrow');
-const lockTx = await merchantWallet.writeContract({
-  address: chain.giftcard_escrow, abi: ESCROW, functionName: 'lock',
-  args: [tradeKey, usdc.address, amount, user.address],
-});
-const lockReceipt = await pub.waitForTransactionReceipt({ hash: lockTx });
-if (lockReceipt.status !== 'success') die('the lock reverted');
-ok(`locked ${amount} USDC units  ${lockTx}`);
+  say('Opening the trade');
+  const opened = await api('/api/v1/giftcard-trades', {
+    method: 'POST',
+    body: JSON.stringify({
+      quoteId: offer.quoteId, faceMinorUnits: FACE_MINOR.toString(), userAddress: user.address,
+    }),
+  });
+  if (opened.status !== 201) die(`open failed: ${opened.status} ${JSON.stringify(opened.body)}`);
+  const trade = opened.body.data;
+  ok(`${trade.id}  state=${trade.state}`);
+  ok(`card sender ${trade.cardSender}, receiver ${trade.cardReceiver}, funder ${trade.funder}`);
 
-const merchantKeys = encryptionIdentity(merchant, MERCHANT_KEY, trade.id);
-const funded = await api(`/api/v1/giftcard-trades/${trade.id}/escrow`, {
-  method: 'POST',
-  headers: { 'x-api-key': apiKey },
-  body: JSON.stringify({
-    txHash: lockTx,
-    recipientPubkey: merchantKeys.publicKey,
-    keySignature: merchantKeys.keySignature,
-  }),
-});
-if (funded.status !== 200) die(`escrow verification refused: ${funded.status} ${JSON.stringify(funded.body)}`);
-ok(`verified on-chain, state=${funded.body.data.state}`);
+  // The invariant the whole timeout rule rests on.
+  if (trade.funder !== trade.cardReceiver) {
+    die(`funder (${trade.funder}) and card receiver (${trade.cardReceiver}) must be the same party`);
+  }
+  const expectedFunder = side === 'buy' ? 'merchant' : 'user';
+  if (trade.funder !== expectedFunder) die(`expected ${expectedFunder} to fund a ${side} trade`);
 
-// ── 8. user delivers the code ────────────────────────────────────────────
-const CODE = `AMZN-${Math.random().toString(36).slice(2, 6).toUpperCase()}-TEST-${Date.now() % 10000}`;
-say('User seals and delivers the code', `plaintext stays here: ${CODE}`);
-const sealed = sealCode(CODE, funded.body.data.recipientPubkey);
-if (JSON.stringify(sealed).includes(CODE)) die('the envelope leaks the plaintext');
-const delivered = await api(`/api/v1/giftcard-trades/${trade.id}/code`, {
-  method: 'POST',
-  body: JSON.stringify({
-    commitment: commitToCode(CODE),
-    sealed,
-    signature: signEip191(trade.id, USER_KEY),
-  }),
-});
-if (delivered.status !== 200) die(`delivery refused: ${delivered.status} ${JSON.stringify(delivered.body)}`);
-ok(`delivered, state=${delivered.body.data.state}`);
+  // Who is who, for this direction.
+  const asMerchant = (p) => p === 'merchant';
+  const funderIsMerchant = asMerchant(trade.funder);
+  const funderWallet = funderIsMerchant ? merchantWallet : userWallet;
+  const funderAddr = funderIsMerchant ? merchant.address : user.address;
+  const funderKey = funderIsMerchant ? MERCHANT_KEY : USER_KEY;
+  const counterparty = funderIsMerchant ? user.address : merchant.address;
+  const amount = BigInt(trade.payoutMinorUnits);
 
-// ── 9. merchant opens it ─────────────────────────────────────────────────
-say('Merchant decrypts the code');
-const revealed = openCode(delivered.body.data.sealedCode, merchantKeys.privateKey);
-if (revealed !== CODE) die(`decrypted to ${revealed}, expected ${CODE}`);
-ok(`read back exactly: ${revealed}`);
-if (commitToCode(revealed) !== delivered.body.data.codeCommitment) die('commitment mismatch');
-ok('matches the commitment the server stored');
+  // Auth differs by party: a merchant presents the api key, a user signs the
+  // trade id. Neither can act in the other's role.
+  const authFor = (party, extra = {}) =>
+    asMerchant(party)
+      ? { headers: { 'x-api-key': apiKey }, body: extra }
+      : { headers: {}, body: { ...extra, signature: signEip191(trade.id, USER_KEY) } };
 
-// ── 10. merchant attests ─────────────────────────────────────────────────
-say('Merchant attests the card is good');
-const attested = await api(`/api/v1/giftcard-trades/${trade.id}/attest`, {
-  method: 'POST',
-  headers: { 'x-api-key': apiKey },
-  body: JSON.stringify({ valid: true }),
-});
-if (attested.status !== 200) die(`attest refused: ${attested.status} ${JSON.stringify(attested.body)}`);
-ok(`state=${attested.body.data.state}`);
+  say(`${trade.funder} locks escrow`);
+  if (!funderIsMerchant) await ensureUserCanTransact(amount);
+  await approveAndConfirm(funderWallet, funderAddr, usdc.address, chain.giftcard_escrow, amount, 'escrow');
+  const tradeKey = keccak256(toBytes(trade.id));
+  const lockTx = await funderWallet.writeContract({
+    address: chain.giftcard_escrow, abi: ESCROW, functionName: 'lock',
+    args: [tradeKey, usdc.address, amount, counterparty],
+  });
+  const lockReceipt = await pub.waitForTransactionReceipt({ hash: lockTx });
+  if (lockReceipt.status !== 'success') die('the lock reverted');
+  ok(`locked ${amount} USDC units  ${lockTx}`);
 
-// ── 11. the payout worker releases ───────────────────────────────────────
-say('Waiting for the payout worker', 'it polls every 20s');
-const before = await pub.readContract({
-  address: usdc.address, abi: ERC20, functionName: 'balanceOf', args: [user.address],
-});
+  const keys = encryptionIdentity(null, funderKey, trade.id);
+  const a = authFor(trade.funder, {
+    txHash: lockTx, recipientPubkey: keys.publicKey, keySignature: keys.keySignature,
+  });
+  const funded = await api(`/api/v1/giftcard-trades/${trade.id}/escrow`, {
+    method: 'POST', headers: a.headers, body: JSON.stringify(a.body),
+  });
+  if (funded.status !== 200) die(`escrow verification refused: ${funded.status} ${JSON.stringify(funded.body)}`);
+  ok(`verified on-chain, state=${funded.body.data.state}`);
 
-let paid = null;
-for (let i = 0; i < 15; i++) {
-  await new Promise((r) => setTimeout(r, 10_000));
-  const t = (await api(`/api/v1/giftcard-trades/${trade.id}`)).body?.data;
-  process.stdout.write(`    …${t?.state}${t?.releaseTxHash ? ' released' : ''}\n`);
-  if (t?.releaseTxHash) { paid = t; break; }
+  const CODE = `AMZN-${Math.random().toString(36).slice(2, 6).toUpperCase()}-${side.toUpperCase()}-${Date.now() % 10000}`;
+  say(`${trade.cardSender} seals and delivers the code`, `plaintext never leaves here: ${CODE}`);
+  const sealed = sealCode(CODE, funded.body.data.recipientPubkey);
+  if (JSON.stringify(sealed).includes(CODE)) die('the envelope leaks the plaintext');
+  const d = authFor(trade.cardSender, { commitment: commitToCode(CODE), sealed });
+  const delivered = await api(`/api/v1/giftcard-trades/${trade.id}/code`, {
+    method: 'POST', headers: d.headers, body: JSON.stringify(d.body),
+  });
+  if (delivered.status !== 200) die(`delivery refused: ${delivered.status} ${JSON.stringify(delivered.body)}`);
+  ok(`delivered, state=${delivered.body.data.state}`);
+
+  say(`${trade.cardReceiver} decrypts it`);
+  const revealed = openCode(delivered.body.data.sealedCode, keys.privateKey);
+  if (revealed !== CODE) die(`decrypted to ${revealed}, expected ${CODE}`);
+  ok(`read back exactly: ${revealed}`);
+  if (commitToCode(revealed) !== delivered.body.data.codeCommitment) die('commitment mismatch');
+  ok('matches the commitment the server stored');
+
+  say(`${trade.cardReceiver} attests the card is good`);
+  const at = authFor(trade.cardReceiver, { valid: true });
+  const attested = await api(`/api/v1/giftcard-trades/${trade.id}/attest`, {
+    method: 'POST', headers: at.headers, body: JSON.stringify(at.body),
+  });
+  if (attested.status !== 200) die(`attest refused: ${attested.status} ${JSON.stringify(attested.body)}`);
+  ok(`state=${attested.body.data.state}`);
+
+  // Settling pays the card sender — the opposite party from the funder.
+  const payeeAddr = trade.cardSender === 'merchant' ? merchant.address : user.address;
+  say('Waiting for the payout worker', `it should pay the ${trade.cardSender}`);
+  const before = await pub.readContract({
+    address: usdc.address, abi: ERC20, functionName: 'balanceOf', args: [payeeAddr],
+  });
+
+  let paid = null;
+  for (let i = 0; i < 15; i++) {
+    await new Promise((r) => setTimeout(r, 10_000));
+    const t = (await api(`/api/v1/giftcard-trades/${trade.id}`)).body?.data;
+    process.stdout.write(`    …${t?.state}${t?.releaseTxHash ? ' released' : ''}\n`);
+    if (t?.releaseTxHash) { paid = t; break; }
+  }
+  if (!paid) die('the payout worker did not release within 150s — check the aggregator logs');
+  ok(`release tx ${paid.releaseTxHash}`);
+
+  const after = await pub.readContract({
+    address: usdc.address, abi: ERC20, functionName: 'balanceOf', args: [payeeAddr],
+  });
+  if (after - before !== amount) die(`${trade.cardSender} received ${after - before}, expected ${amount}`);
+  ok(`${trade.cardSender} received ${after - before} USDC units on-chain`);
+
+  if (await pub.readContract({
+    address: chain.giftcard_escrow, abi: ESCROW, functionName: 'isOpen', args: [tradeKey],
+  })) die('the escrow still reports the lock as open');
+  ok('escrow closed');
+
+  return { side, trade: trade.id, lock: lockTx, release: paid.releaseTxHash };
 }
-if (!paid) die('the payout worker did not release within 150s — check the aggregator logs');
-ok(`release tx ${paid.releaseTxHash}`);
 
-const after = await pub.readContract({
-  address: usdc.address, abi: ERC20, functionName: 'balanceOf', args: [user.address],
-});
-const gained = after - before;
-if (gained !== amount) die(`user received ${gained}, expected ${amount}`);
-ok(`user received ${gained} USDC units on-chain`);
+/** The user wallet is a throwaway in the buy direction and never needs
+ *  anything. In the sell direction it has to lock escrow, so top it up from
+ *  the merchant — both keys are already here, and asking someone to fund a
+ *  second wallet by hand mid-test is a poor use of their time. */
+async function ensureUserCanTransact(amount) {
+  const gas = await pub.getBalance({ address: user.address });
+  if (gas < 10n ** 15n) {
+    const tx = await merchantWallet.sendTransaction({ to: user.address, value: 10n ** 15n });
+    await pub.waitForTransactionReceipt({ hash: tx });
+    ok(`funded the user with gas ${tx}`);
+  }
+  const bal = await pub.readContract({
+    address: usdc.address, abi: ERC20, functionName: 'balanceOf', args: [user.address],
+  });
+  if (bal < amount) {
+    const tx = await merchantWallet.writeContract({
+      address: usdc.address, abi: ERC20, functionName: 'transfer', args: [user.address, amount * 2n],
+    });
+    await pub.waitForTransactionReceipt({ hash: tx });
+    ok(`sent the user ${amount * 2n} USDC units ${tx}`);
+    for (let i = 0; i < 20; i++) {
+      const seen = await pub.readContract({
+        address: usdc.address, abi: ERC20, functionName: 'balanceOf', args: [user.address],
+      });
+      if (seen >= amount) return;
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+    die('sent the user USDC but no RPC read reflected it');
+  }
+}
 
-const stillOpen = await pub.readContract({
-  address: chain.giftcard_escrow, abi: ESCROW, functionName: 'isOpen', args: [tradeKey],
-});
-if (stillOpen) die('the escrow still reports the lock as open');
-ok('escrow closed');
+const results = [];
+for (const side of DIRECTION === 'both' ? ['buy', 'sell'] : [DIRECTION]) {
+  if (!['buy', 'sell'].includes(side)) die(`DIRECTION must be buy, sell or both`);
+  results.push(await runTrade(side));
+}
 
-// ── tidy up ──────────────────────────────────────────────────────────────
+// Leave the book as we found it.
 for (const q of (await api(`/solver-api/giftcard-quotes?solverId=${solverId}`, {
   headers: { 'x-api-key': apiKey },
 })).body?.data ?? []) {
@@ -358,7 +429,10 @@ for (const q of (await api(`/solver-api/giftcard-quotes?solverId=${solverId}`, {
   });
 }
 
-console.log(`\n✓ A complete gift card trade settled on ${CHAIN.name}.`);
-console.log(`  trade   ${trade.id}`);
-console.log(`  lock    ${lockTx}`);
-console.log(`  release ${paid.releaseTxHash}`);
+console.log(`\n${'═'.repeat(64)}`);
+for (const r of results) {
+  console.log(`✓ ${r.side.padEnd(4)} settled on ${CHAIN.name}`);
+  console.log(`    trade   ${r.trade}`);
+  console.log(`    lock    ${r.lock}`);
+  console.log(`    release ${r.release}`);
+}
