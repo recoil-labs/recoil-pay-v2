@@ -11,12 +11,27 @@
  * envelopes, and the GCM tag means a tampered envelope fails to open rather
  * than decrypting to garbage.
  *
- * Why secp256k1 rather than a fresh keypair the app manages: both parties
- * already hold one — it is how they authenticate — so there is no new key to
- * distribute, store or lose. The cost is that a public key must be obtained
- * explicitly, because an Ethereum address is a hash of one and cannot be
- * reversed; the recipient supplies theirs when they fund escrow, and the
- * server verifies it against their address before storing it.
+ * # Where the key comes from
+ *
+ * NOT the wallet keypair. Sealing to a wallet's public key is easy; opening
+ * it needs that wallet's private key, and no browser wallet will hand one to
+ * a page. A scheme built that way encrypts perfectly and can never be
+ * decrypted by anybody.
+ *
+ * So each party derives a *separate* encryption keypair from a signature
+ * over a fixed message. ECDSA signing is deterministic (RFC 6979), so the
+ * same wallet signing the same message always produces the same signature,
+ * and therefore always the same key — nothing has to be stored, and losing
+ * the browser loses nothing.
+ *
+ * # Why the server cannot read any of it
+ *
+ * The derivation signature IS the private key, in effect, so it never leaves
+ * the browser. What the server gets is the public key plus a *second*
+ * signature, over a message naming that key and the trade. From that the
+ * server can prove the key belongs to the party it expects, and can learn
+ * nothing that helps it decrypt. Sending the derivation signature instead
+ * would be far simpler and would hand the server every code on the platform.
  */
 
 import { gcm } from '@noble/ciphers/aes';
@@ -161,9 +176,65 @@ export function pubkeyFromSignature(messageHash: Uint8Array, signatureHex: strin
   return bytesToHex(sig.recoverPublicKey(messageHash).toRawBytes(false));
 }
 
-/** The message a party signs to publish their public key. Includes the trade
- *  id so a signature harvested from one trade cannot be replayed to nominate
- *  a key on another. */
-export function pubkeyDisclosureMessage(tradeId: string): string {
-  return `RecoilPay: publish my encryption key for trade ${tradeId}`;
+/** The message whose signature seeds a party's encryption key.
+ *
+ *  Fixed and app-wide, deliberately: the key must come out the same every
+ *  time the same person signs, across trades, sessions and devices. Scoping
+ *  it to a trade would mean a different key per trade, and a code sealed
+ *  yesterday could not be opened today.
+ *
+ *  The wording is aimed at the person staring at a wallet prompt, since
+ *  "sign this opaque string" is how people get phished. */
+export const KEY_DERIVATION_MESSAGE = [
+  'RecoilPay Gift Cards',
+  '',
+  'Sign to unlock your encryption key.',
+  '',
+  'This is not a transaction and cannot move funds. The signature never',
+  'leaves your browser — it is what lets you read gift card codes sent to',
+  'you, and nobody else can read them without it.',
+].join('\n');
+
+/** A party's encryption keypair, derived from their signature over
+ *  [`KEY_DERIVATION_MESSAGE`].
+ *
+ *  The signature is hashed rather than used directly: a raw secp256k1
+ *  signature is 65 bytes and structured, while a private key must be a
+ *  32-byte scalar below the curve order. keccak256 gives the right size, and
+ *  the retry below handles the vanishingly rare out-of-range result rather
+ *  than producing an invalid key. */
+export function deriveEncryptionKeypair(derivationSignatureHex: string): {
+  privateKey: string;
+  publicKey: string;
+} {
+  const sig = hexToBytes(derivationSignatureHex);
+  if (sig.length !== 65) throw new Error('derivation signature must be 65 bytes');
+
+  let seed = keccak_256(sig);
+  // secp256k1 rejects 0 and anything >= n. The odds are about 2^-128, but a
+  // silent throw at signing time months later is a bad way to find out.
+  for (let i = 0; i < 8 && !secp256k1.utils.isValidPrivateKey(seed); i++) {
+    seed = keccak_256(seed);
+  }
+  if (!secp256k1.utils.isValidPrivateKey(seed)) {
+    throw new Error('could not derive a valid key from that signature');
+  }
+
+  return {
+    privateKey: bytesToHex(seed),
+    publicKey: bytesToHex(secp256k1.getPublicKey(seed, false)),
+  };
+}
+
+/** The message a party signs to *publish* their encryption key.
+ *
+ *  Distinct from the derivation message and sent to the server, where
+ *  recovering it proves the key belongs to this party on this trade. It
+ *  names both, so a disclosure harvested from one trade cannot be replayed
+ *  to nominate a key on another.
+ *
+ *  Must match `key_disclosure_message` in the Rust handler byte for byte. */
+export function pubkeyDisclosureMessage(tradeId: string, publicKeyHex: string): string {
+  const key = publicKeyHex.trim().toLowerCase();
+  return `RecoilPay: encryption key for trade ${tradeId} is ${key}`;
 }

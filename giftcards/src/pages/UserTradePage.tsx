@@ -5,13 +5,9 @@ import { useAccount, useSignMessage } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { UserApi, UserApiError, tradeAuthMessage, userAction, waitingOn } from '../api/userApi';
 import { Button, Card, CardHeader, Field, Pill, inputClass } from '../components/ui';
-import {
-  commitToCode,
-  eip191Hash,
-  pubkeyDisclosureMessage,
-  pubkeyFromSignature,
-  sealCode,
-} from '../crypto/sealedCode';
+import { commitToCode, sealCode } from '../crypto/sealedCode';
+import { useEncryptionKey } from '../crypto/useEncryptionKey';
+import { RevealCode } from '../components/RevealCode';
 import { fromMinorUnits, ratePercent } from '../types/giftcards';
 import { STATE_COPY, isTerminal, minutesLeft, type Trade } from '../types/trades';
 
@@ -51,7 +47,7 @@ function Countdown({ trade }: { trade: Trade }) {
 
 function FundEscrow({ trade, onDone }: { trade: Trade; onDone: () => void }) {
   const sign = useTradeSignature(trade.id);
-  const { signMessageAsync } = useSignMessage();
+  const { discloseFor } = useEncryptionKey();
   const [txHash, setTxHash] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,16 +56,16 @@ function FundEscrow({ trade, onDone }: { trade: Trade; onDone: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      // The public key cannot be derived from an address, so it is recovered
-      // from a signature. Scoped to this trade so one taken elsewhere cannot
-      // nominate a key here.
-      const keyMessage = pubkeyDisclosureMessage(trade.id);
-      const keySig = await signMessageAsync({ message: keyMessage });
-      const recipientPubkey = pubkeyFromSignature(eip191Hash(keyMessage), keySig);
+      // Not the wallet key: a separate encryption key derived from a wallet
+      // signature, because no wallet hands a page its private key and a code
+      // sealed to one could never be opened. `discloseFor` also signs the
+      // proof the server checks.
+      const { publicKey, signature: keySignature } = await discloseFor(trade.id);
 
       await UserApi.markEscrowFunded(trade.id, {
         txHash: txHash.trim(),
-        recipientPubkey,
+        recipientPubkey: publicKey,
+        keySignature,
         signature: await sign(),
       });
       onDone();
@@ -188,6 +184,7 @@ function ConfirmCard({ trade, onDone }: { trade: Trade; onDone: () => void }) {
         Redeem the code, then tell us how it went. If you say nothing before the
         deadline, the escrow releases to the merchant.
       </p>
+      <RevealCode trade={trade} />
       {rejecting ? (
         <>
           <Field
@@ -225,24 +222,6 @@ function ConfirmCard({ trade, onDone }: { trade: Trade; onDone: () => void }) {
         </>
       )}
     </div>
-  );
-}
-
-/** The sealed code, shown to the user when they are the one who received it.
- *  They hold the key, so decryption happens in their wallet — which no
- *  browser wallet exposes. Until that changes the code is shown as the
- *  envelope, and the merchant delivers out of band. */
-function ReceivedCode({ trade }: { trade: Trade }) {
-  if (!trade.sealedCode) return null;
-  return (
-    <Card className="px-5 py-4">
-      <p className="text-[13px] text-secondary">
-        Your code was delivered, encrypted to your wallet key. Decrypting it needs
-        your private key, which your wallet does not expose to a web page — so use
-        the desktop helper, or ask the merchant to resend it to you directly.
-      </p>
-      <p className="mt-2 font-mono text-[11px] break-all text-muted">{trade.sealedCode.ct}</p>
-    </Card>
   );
 }
 
@@ -376,7 +355,6 @@ export function UserTradePage() {
         </Card>
       ) : null}
 
-      {trade.cardReceiver === 'user' && <ReceivedCode trade={trade} />}
     </div>
   );
 }

@@ -59,10 +59,16 @@ pub struct CreateTradeRequest {
 pub struct EscrowFundedRequest {
 	#[serde(alias = "txHash")]
 	pub tx_hash: String,
-	/// The caller's own secp256k1 public key, uncompressed `0x04…` hex.
-	/// The code will be sealed to it. Verified against their address below.
+	/// The caller's *encryption* public key, uncompressed `0x04…` hex — not
+	/// their wallet key. The code will be sealed to it.
 	#[serde(alias = "recipientPubkey")]
 	pub recipient_pubkey: String,
+	/// Signature over [`key_disclosure_message`], proving this key belongs to
+	/// the caller on this trade. Deliberately NOT the signature the key was
+	/// derived from: that one is equivalent to the private key, and a server
+	/// holding it could decrypt every code on the platform.
+	#[serde(alias = "keySignature")]
+	pub key_signature: String,
 	#[serde(flatten)]
 	pub auth: PartyAuth,
 }
@@ -301,12 +307,67 @@ fn recover_signer(message: &str, signature_hex: &str) -> Result<String, String> 
 	Ok(format!("{addr:#x}"))
 }
 
+/// What a party signs to publish their encryption key.
+///
+/// Names both the key and the trade, so a disclosure harvested from one
+/// trade cannot be replayed to nominate a key on another. Must match
+/// `pubkeyDisclosureMessage` in the client's `sealedCode.ts` byte for byte —
+/// a mismatch recovers a different address and every escrow call fails.
+fn key_disclosure_message(trade_id: &str, pubkey_hex: &str) -> String {
+	format!(
+		"RecoilPay: encryption key for trade {trade_id} is {}",
+		pubkey_hex.trim().to_ascii_lowercase()
+	)
+}
+
+/// Check a submitted encryption key really belongs to `owner`.
+///
+/// Without this anyone reaching the escrow endpoint could nominate a key
+/// *they* hold and have the next code sealed to themselves — the whole
+/// encrypted-transport design would be decorative.
+///
+/// The key is an *encryption* key derived from a wallet signature, not the
+/// wallet key itself, so its address cannot simply be compared to the
+/// owner's. Instead the owner signs a message naming the key, and that
+/// signature is what is checked here. The server learns nothing from it that
+/// helps decrypt anything.
+fn verify_key_disclosure(
+	trade_id: &str,
+	pubkey_hex: &str,
+	signature_hex: &str,
+	owner: &str,
+) -> Result<(), String> {
+	let raw = pubkey_hex.trim().trim_start_matches("0x");
+	// 65 bytes uncompressed: a 0x04 tag then X and Y. The compressed form is
+	// rejected rather than expanded — supporting two encodings would double
+	// the surface of a check that must not be wrong.
+	if raw.len() != 130 {
+		return Err(format!(
+			"public key must be 65 bytes uncompressed (130 hex chars), got {}",
+			raw.len()
+		));
+	}
+	let bytes = alloy_primitives::hex::decode(raw)
+		.map_err(|e| format!("public key is not valid hex: {e}"))?;
+	if bytes[0] != 0x04 {
+		return Err("public key must be uncompressed (0x04 prefix)".to_string());
+	}
+
+	let message = key_disclosure_message(trade_id, pubkey_hex);
+	let signer = recover_signer(&message, signature_hex)?;
+	if signer.eq_ignore_ascii_case(owner.trim()) {
+		Ok(())
+	} else {
+		Err("that key was not signed for by your address".to_string())
+	}
+}
+
 /// Derive the Ethereum address an uncompressed secp256k1 public key owns.
 ///
-/// This is what makes a caller-supplied key safe to trust. Without it anyone
-/// who could reach the escrow endpoint could nominate a key *they* hold, and
-/// the next code would be sealed to them instead of to the real counterparty
-/// — the whole encrypted-transport design would be decorative.
+/// Still used to sanity-check wallet keys elsewhere; encryption keys are
+/// verified by signature instead, since they are derived and so own a
+/// different address by construction.
+#[allow(dead_code)]
 fn address_from_pubkey(pubkey_hex: &str) -> Result<String, String> {
 	let raw = pubkey_hex.trim().trim_start_matches("0x");
 	// 65 bytes uncompressed: a 0x04 tag then X and Y. The compressed form
@@ -559,15 +620,8 @@ pub async fn giftcard_trade_escrow_funded(
 		}
 	};
 
-	let derived = address_from_pubkey(&req.recipient_pubkey)
+	verify_key_disclosure(&trade.id, &req.recipient_pubkey, &req.key_signature, &owner)
 		.map_err(|e| err(StatusCode::BAD_REQUEST, "bad_pubkey", e))?;
-	if !derived.eq_ignore_ascii_case(owner.trim()) {
-		return Err(err(
-			StatusCode::BAD_REQUEST,
-			"pubkey_mismatch",
-			"that public key does not belong to your address",
-		));
-	}
 
 	// Verify the lock actually landed, for exactly this trade, before the
 	// trade advances. Taking the hash on trust would let a funder point at
@@ -941,6 +995,51 @@ mod tests {
 			"compressed form must not be silently accepted"
 		);
 		assert!(address_from_pubkey(&format!("0x04{}", "z".repeat(128))).is_err(), "not hex");
+	}
+
+	#[test]
+	fn the_disclosure_message_matches_the_clients_wording() {
+		// Byte-for-byte with `pubkeyDisclosureMessage` in sealedCode.ts. If
+		// these drift, recovery yields a different address and every
+		// escrow-funding call fails with a signature error.
+		assert_eq!(
+			key_disclosure_message("gct-1", "0x04AB"),
+			"RecoilPay: encryption key for trade gct-1 is 0x04ab"
+		);
+	}
+
+	#[test]
+	fn a_disclosure_naming_another_trade_is_not_reusable() {
+		// The replay this guards: take a valid disclosure from one trade and
+		// nominate your key on someone else's.
+		assert_ne!(
+			key_disclosure_message("gct-1", "0x04ab"),
+			key_disclosure_message("gct-2", "0x04ab")
+		);
+	}
+
+	#[test]
+	fn a_malformed_encryption_key_is_rejected_before_any_signature_work() {
+		for bad in [
+			"",
+			"0x04ab",
+			&format!("0x02{}", "a".repeat(128)), // compressed form
+			&format!("0x04{}", "z".repeat(128)), // not hex
+		] {
+			assert!(
+				verify_key_disclosure("gct-1", bad, "0x00", "0xowner").is_err(),
+				"accepted {bad:?}"
+			);
+		}
+	}
+
+	#[test]
+	fn a_disclosure_signed_by_the_wrong_wallet_is_refused() {
+		// A well-formed key with a signature that does not recover to the
+		// owner must fail — that is the whole check.
+		let key = format!("0x04{}", "11".repeat(64));
+		let sig = format!("0x{}", "22".repeat(65));
+		assert!(verify_key_disclosure("gct-1", &key, &sig, "0xowner").is_err());
 	}
 
 	#[test]

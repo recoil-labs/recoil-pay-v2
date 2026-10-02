@@ -219,11 +219,15 @@ export const MerchantApi = {
    *
    *  The two travel together because the funder is always the card receiver
    *  — so the party funding escrow is, in both directions, exactly the party
-   *  whose key the sender will need. The server verifies the key against
-   *  this merchant's registered wallet before storing it. */
+   *  whose key the sender will need.
+   *
+   *  `recipientPubkey` is a derived *encryption* key, not this merchant's
+   *  wallet key; `keySignature` is what proves it theirs. The signature the
+   *  key was derived from is never sent — it is equivalent to the private
+   *  key, and a server holding it could read every code on the platform. */
   async markEscrowFunded(
     id: string,
-    input: { txHash: string; recipientPubkey: string },
+    input: { txHash: string; recipientPubkey: string; keySignature: string },
   ): Promise<Trade> {
     const body = await request<{ data: Trade }>(
       `/api/v1/giftcard-trades/${encodeURIComponent(id)}/escrow`,

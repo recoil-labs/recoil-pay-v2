@@ -31,7 +31,8 @@ try {
 
   const { secp256k1 } = await import('@noble/curves/secp256k1');
   const {
-    addressFromPubkey, commitToCode, eip191Hash, openCode, pubkeyFromSignature, sealCode,
+    KEY_DERIVATION_MESSAGE, addressFromPubkey, commitToCode, deriveEncryptionKeypair,
+    eip191Hash, openCode, pubkeyDisclosureMessage, pubkeyFromSignature, sealCode,
   } = await import(pathToFileURL(bundle).href);
 
   const hex = (b) => `0x${Buffer.from(b).toString('hex')}`;
@@ -98,6 +99,66 @@ try {
   let refused = false;
   try { sealCode('   ', pub); } catch { refused = true; }
   check('refuses to seal an empty code', refused);
+
+  // ── the derived encryption key ────────────────────────────────────────
+  //
+  // The whole flow in miniature. Sealing to a WALLET key is the trap: it
+  // encrypts fine and can never be opened, because no wallet gives a page
+  // its private key. These checks are what prove the real path works.
+
+  const walletKey = secp256k1.utils.randomPrivateKey();
+  const signDerivation = () => {
+    const sig = secp256k1.sign(eip191Hash(KEY_DERIVATION_MESSAGE), walletKey);
+    return hex(new Uint8Array([...sig.toCompactRawBytes(), 27 + sig.recovery]));
+  };
+
+  const derived = deriveEncryptionKeypair(signDerivation());
+
+  // Determinism is the load-bearing property: without it a code sealed
+  // yesterday could not be opened today, on any device.
+  check(
+    'the same wallet derives the same key every time',
+    deriveEncryptionKeypair(signDerivation()).privateKey === derived.privateKey,
+  );
+
+  const otherWallet = secp256k1.utils.randomPrivateKey();
+  const otherSig = secp256k1.sign(eip191Hash(KEY_DERIVATION_MESSAGE), otherWallet);
+  const otherDerived = deriveEncryptionKeypair(
+    hex(new Uint8Array([...otherSig.toCompactRawBytes(), 27 + otherSig.recovery])),
+  );
+  check(
+    'a different wallet derives a different key',
+    otherDerived.privateKey !== derived.privateKey,
+  );
+
+  // End to end: seal to the derived PUBLIC key, open with the derived
+  // PRIVATE key. This is exactly what the two browsers do.
+  const sealedToDerived = sealCode(CODE, derived.publicKey);
+  check(
+    'a code sealed to a derived key opens with it',
+    openCode(sealedToDerived, derived.privateKey) === CODE,
+  );
+  let wrongWalletDenied = false;
+  try { openCode(sealedToDerived, otherDerived.privateKey); } catch { wrongWalletDenied = true; }
+  check('another wallet cannot open it', wrongWalletDenied);
+
+  // The derived key owns a different address than the wallet, which is why
+  // the server verifies it by signature rather than by address.
+  check(
+    'the derived key is not the wallet key',
+    addressFromPubkey(derived.publicKey) !== addressFromPubkey(hex(secp256k1.getPublicKey(walletKey, false))),
+  );
+
+  // Must match `key_disclosure_message` in the Rust handler byte for byte.
+  check(
+    'the disclosure message matches the server wording',
+    pubkeyDisclosureMessage('gct-1', '0x04AB') ===
+      'RecoilPay: encryption key for trade gct-1 is 0x04ab',
+  );
+  check(
+    'a disclosure is scoped to one trade',
+    pubkeyDisclosureMessage('gct-1', '0x04ab') !== pubkeyDisclosureMessage('gct-2', '0x04ab'),
+  );
 
   console.log(failed === 0 ? '\nall sealing checks passed' : `\n${failed} CHECK(S) FAILED`);
   process.exitCode = failed === 0 ? 0 : 1;

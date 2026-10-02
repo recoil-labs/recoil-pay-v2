@@ -1,15 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Clock } from 'lucide-react';
-import { useSignMessage } from 'wagmi';
 import { ApiError, MerchantApi, getSolverId } from '../api/merchantApi';
 import { Button, Card, CardHeader, EmptyState, Field, Pill, inputClass } from '../components/ui';
-import {
-  commitToCode,
-  eip191Hash,
-  pubkeyDisclosureMessage,
-  pubkeyFromSignature,
-  sealCode,
-} from '../crypto/sealedCode';
+import { commitToCode, sealCode } from '../crypto/sealedCode';
+import { useEncryptionKey } from '../crypto/useEncryptionKey';
+import { RevealCode } from '../components/RevealCode';
 import { fromMinorUnits, ratePercent } from '../types/giftcards';
 import {
   STATE_COPY,
@@ -118,6 +113,7 @@ function Attestation({ trade, onDone }: { trade: Trade; onDone: () => void }) {
       <p className="text-[13px] text-secondary">
         Redeem the code into your account, then say what happened.
       </p>
+      <RevealCode trade={trade} />
       {rejecting ? (
         <>
           <Field
@@ -159,7 +155,7 @@ function Attestation({ trade, onDone }: { trade: Trade; onDone: () => void }) {
 }
 
 function EscrowFunding({ trade, onDone }: { trade: Trade; onDone: () => void }) {
-  const { signMessageAsync } = useSignMessage();
+  const { discloseFor } = useEncryptionKey();
   const [txHash, setTxHash] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -168,17 +164,16 @@ function EscrowFunding({ trade, onDone }: { trade: Trade; onDone: () => void }) 
     setBusy(true);
     setError(null);
     try {
-      // An address is a hash of a public key and cannot be reversed into
-      // one, so the key is recovered from a signature. Scoped to this trade
-      // id, so a signature taken from one trade cannot nominate a key on
-      // another.
-      const message = pubkeyDisclosureMessage(trade.id);
-      const signature = await signMessageAsync({ message });
-      const recipientPubkey = pubkeyFromSignature(eip191Hash(message), signature);
+      // Not the wallet key: a separate encryption key derived from a wallet
+      // signature, because no wallet will hand a page its private key and a
+      // code sealed to one could never be opened. `discloseFor` also signs
+      // the proof the server checks.
+      const { publicKey, signature } = await discloseFor(trade.id);
 
       await MerchantApi.markEscrowFunded(trade.id, {
         txHash: txHash.trim(),
-        recipientPubkey,
+        recipientPubkey: publicKey,
+        keySignature: signature,
       });
       onDone();
     } catch (e) {

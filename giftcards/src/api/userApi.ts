@@ -123,7 +123,15 @@ export const UserApi = {
    *  party funding escrow is exactly the party whose key the sender needs. */
   async markEscrowFunded(
     id: string,
-    input: { txHash: string; recipientPubkey: string; signature: string },
+    input: {
+      txHash: string;
+      recipientPubkey: string;
+      /** Proof the encryption key is this party's. Not the signature it was
+       *  derived from — that one never leaves the browser. */
+      keySignature: string;
+      /** Authorises the call itself. */
+      signature: string;
+    },
   ): Promise<Trade> {
     const body = await request<{ data: Trade }>(
       `/api/v1/giftcard-trades/${encodeURIComponent(id)}/escrow`,
