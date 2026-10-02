@@ -8,7 +8,7 @@
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { keccak_256 } from '@noble/hashes/sha3';
 
-const BASE = 'http://127.0.0.1:4000';
+const BASE = process.env.SMOKE_BASE ?? 'http://127.0.0.1:4000';
 let failed = 0;
 const check = (name, ok, extra = '') => {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${extra ? ` — ${extra}` : ''}`);
@@ -194,11 +194,18 @@ const trade = await api('/api/v1/giftcard-trades', {
 });
 // No GIFTCARD_ATTESTOR_KEY here, so this must refuse rather than open a trade
 // it could never pay out.
-check(
-  'a trade is refused when settlement is unconfigured',
-  trade.status === 503 && trade.body?.error === 'settlement_disabled',
-  `${trade.status} ${trade.body?.error ?? ''}`,
-);
+if (trade.status === 503) {
+  check('settlement is configured', false, 'aggregator reports settlement_disabled');
+} else {
+  // A merchant with no bond has zero capacity, so an unstaked merchant is
+  // correctly refused here — that is the exposure cap doing its job, not a
+  // failure. Either outcome proves settlement is switched on.
+  check(
+    'a trade is either opened or refused for want of a bond',
+    trade.status === 201 || trade.body?.error === 'merchant_at_capacity',
+    `${trade.status} ${trade.body?.error ?? 'created'}`,
+  );
+}
 
 // ── 6. pause takes a rate off the book ────────────────────────────────────
 const quoteId = offers[0].quoteId;
@@ -217,6 +224,29 @@ const afterPause = await api('/api/v1/giftcard-quotes/rank', {
   }),
 });
 check('a paused rate leaves the book', (afterPause.body?.data ?? []).length === 0);
+
+// ── clean up after ourselves ──────────────────────────────────────────────
+//
+// This runs against production. Quotes left behind sit on the public book
+// under a merchant with no bond, so a real seller could match one and then
+// be refused for `merchant_at_capacity` — a confusing dead end created
+// entirely by a test. Withdraw everything this run published.
+const mine = await api(`/solver-api/giftcard-quotes?solverId=${encodeURIComponent(solverId)}`, {
+  headers: { 'x-api-key': apiKey },
+});
+let removed = 0;
+for (const q of mine.body?.data ?? []) {
+  const res = await api(`/solver-api/giftcard-quotes/${encodeURIComponent(q.id)}`, {
+    method: 'DELETE',
+    headers: { 'x-api-key': apiKey },
+  });
+  if (res.body?.success) removed++;
+}
+check(
+  'the run withdraws every quote it published',
+  removed === (mine.body?.data ?? []).length && removed > 0,
+  `${removed} withdrawn`,
+);
 
 console.log(failed === 0 ? '\nall smoke checks passed' : `\n${failed} CHECK(S) FAILED`);
 process.exit(failed === 0 ? 0 : 1);
