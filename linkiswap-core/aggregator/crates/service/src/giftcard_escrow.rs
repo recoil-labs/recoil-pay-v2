@@ -137,7 +137,7 @@ impl GiftCardEscrowClient {
 		self.attestor.as_ref().map(|s| s.address())
 	}
 
-	fn bond_address(&self, caip2: &str) -> EscrowResult<(Address, String)> {
+	fn bond_address(&self, caip2: &str) -> EscrowResult<(Address, Vec<String>)> {
 		let chain = self
 			.chains
 			.by_caip2(caip2)
@@ -145,7 +145,7 @@ impl GiftCardEscrowClient {
 		if chain.merchant_bond.trim().is_empty() {
 			return Err(EscrowError::NoBondOnChain(caip2.to_string()));
 		}
-		Ok((parse_address(&chain.merchant_bond)?, chain.rpc_url.clone()))
+		Ok((parse_address(&chain.merchant_bond)?, owned(chain.rpc_candidates())))
 	}
 
 	/// A merchant's stake on this chain, less anything a pending slash has
@@ -160,11 +160,8 @@ impl GiftCardEscrowClient {
 		merchant: &str,
 		token: &str,
 	) -> EscrowResult<U256> {
-		let (bond, rpc_url) = self.bond_address(caip2)?;
-		let provider = ProviderBuilder::new()
-			.connect(&rpc_url)
-			.await
-			.map_err(|e| EscrowError::Rpc(e.to_string()))?;
+		let (bond, rpcs) = self.bond_address(caip2)?;
+		let provider = connect_any(&rpcs).await?;
 
 		let call = availableBondCall {
 			merchant: parse_address(merchant)?,
@@ -195,13 +192,8 @@ impl GiftCardEscrowClient {
 		trade_id: &str,
 	) -> EscrowResult<String> {
 		let signer = self.attestor.as_ref().ok_or(EscrowError::NoAttestorKey)?;
-		let (bond, rpc_url) = self.bond_address(caip2)?;
-
-		let provider = ProviderBuilder::new()
-			.wallet(EthereumWallet::from(signer.clone()))
-			.connect(&rpc_url)
-			.await
-			.map_err(|e| EscrowError::Rpc(e.to_string()))?;
+		let (bond, rpcs) = self.bond_address(caip2)?;
+		let provider = connect_any_signing(&rpcs, signer).await?;
 
 		let call = proposeSlashCall {
 			merchant: parse_address(merchant)?,
@@ -223,7 +215,7 @@ impl GiftCardEscrowClient {
 		Ok(format!("{hash:#x}"))
 	}
 
-	fn escrow_address(&self, caip2: &str) -> EscrowResult<(Address, String)> {
+	fn escrow_address(&self, caip2: &str) -> EscrowResult<(Address, Vec<String>)> {
 		let chain = self
 			.chains
 			.by_caip2(caip2)
@@ -232,7 +224,7 @@ impl GiftCardEscrowClient {
 			return Err(EscrowError::NoEscrowOnChain(caip2.to_string()));
 		}
 		let addr = parse_address(&chain.giftcard_escrow)?;
-		Ok((addr, chain.rpc_url.clone()))
+		Ok((addr, owned(chain.rpc_candidates())))
 	}
 
 	/// Confirm `tx_hash` locked exactly what the trade says it should.
@@ -247,11 +239,8 @@ impl GiftCardEscrowClient {
 		tx_hash: &str,
 		expected: &ExpectedLock,
 	) -> EscrowResult<VerifiedLock> {
-		let (escrow, rpc_url) = self.escrow_address(caip2)?;
-		let provider = ProviderBuilder::new()
-			.connect(&rpc_url)
-			.await
-			.map_err(|e| EscrowError::Rpc(e.to_string()))?;
+		let (escrow, rpcs) = self.escrow_address(caip2)?;
+		let provider = connect_any(&rpcs).await?;
 
 		let hash = B256::from_str(tx_hash.trim())
 			.map_err(|_| EscrowError::Verification(format!("{tx_hash} is not a transaction hash")))?;
@@ -337,14 +326,9 @@ impl GiftCardEscrowClient {
 	/// own transition rather than from a request field.
 	pub async fn release(&self, caip2: &str, trade_id: &str, to: &str) -> EscrowResult<String> {
 		let signer = self.attestor.as_ref().ok_or(EscrowError::NoAttestorKey)?;
-		let (escrow, rpc_url) = self.escrow_address(caip2)?;
+		let (escrow, rpcs) = self.escrow_address(caip2)?;
 		let recipient = parse_address(to)?;
-
-		let provider = ProviderBuilder::new()
-			.wallet(EthereumWallet::from(signer.clone()))
-			.connect(&rpc_url)
-			.await
-			.map_err(|e| EscrowError::Rpc(e.to_string()))?;
+		let provider = connect_any_signing(&rpcs, signer).await?;
 
 		let call = releaseCall {
 			tradeId: trade_id_hash(trade_id),
@@ -368,11 +352,8 @@ impl GiftCardEscrowClient {
 	/// Whether the contract still holds this trade's funds. Used to avoid
 	/// re-sending a release for a lock that is already paid out.
 	pub async fn is_open(&self, caip2: &str, trade_id: &str) -> EscrowResult<bool> {
-		let (escrow, rpc_url) = self.escrow_address(caip2)?;
-		let provider = ProviderBuilder::new()
-			.connect(&rpc_url)
-			.await
-			.map_err(|e| EscrowError::Rpc(e.to_string()))?;
+		let (escrow, rpcs) = self.escrow_address(caip2)?;
+		let provider = connect_any(&rpcs).await?;
 
 		let call = isOpenCall {
 			tradeId: trade_id_hash(trade_id),
@@ -388,6 +369,56 @@ impl GiftCardEscrowClient {
 
 		isOpenCall::abi_decode_returns(&out).map_err(|e| EscrowError::Rpc(e.to_string()))
 	}
+}
+
+fn owned(v: Vec<&str>) -> Vec<String> {
+	v.into_iter().map(str::to_string).collect()
+}
+
+/// Connect to the first endpoint that answers.
+///
+/// A single RPC per chain means an outage stops escrow releases entirely —
+/// they fail and retry rather than paying anyone, for as long as it lasts.
+/// A failure here is reported with the last error, not a generic one, so a
+/// misconfigured URL is distinguishable from an endpoint being down.
+async fn connect_any(rpcs: &[String]) -> EscrowResult<impl Provider> {
+	let mut last = String::from("no RPC endpoints configured");
+	for (i, url) in rpcs.iter().enumerate() {
+		match ProviderBuilder::new().connect(url).await {
+			Ok(p) => {
+				if i > 0 {
+					warn!(endpoint = %url, "primary RPC unreachable; using a fallback");
+				}
+				return Ok(p);
+			},
+			Err(e) => last = e.to_string(),
+		}
+	}
+	Err(EscrowError::Rpc(last))
+}
+
+/// Same, but with a wallet attached for sending transactions.
+async fn connect_any_signing(
+	rpcs: &[String],
+	signer: &PrivateKeySigner,
+) -> EscrowResult<impl Provider> {
+	let mut last = String::from("no RPC endpoints configured");
+	for (i, url) in rpcs.iter().enumerate() {
+		match ProviderBuilder::new()
+			.wallet(EthereumWallet::from(signer.clone()))
+			.connect(url)
+			.await
+		{
+			Ok(p) => {
+				if i > 0 {
+					warn!(endpoint = %url, "primary RPC unreachable; using a fallback");
+				}
+				return Ok(p);
+			},
+			Err(e) => last = e.to_string(),
+		}
+	}
+	Err(EscrowError::Rpc(last))
 }
 
 fn parse_address(s: &str) -> EscrowResult<Address> {

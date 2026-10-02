@@ -56,6 +56,14 @@ pub struct ChainInfo {
 	pub name: String,
 	/// JSON-RPC endpoint used for on-chain reads.
 	pub rpc_url: String,
+	/// Further endpoints to try when `rpc_url` is unreachable.
+	///
+	/// Public RPCs fail — a BNB deploy died here on a DNS lookup for a host
+	/// that resolved fine a minute later. With one endpoint per chain, an
+	/// outage means escrow releases silently failing and retrying rather
+	/// than paying anyone, for as long as it lasts.
+	#[serde(default)]
+	pub rpc_fallbacks: Vec<String>,
 	/// OIF InputSettler (escrow) address on this chain.
 	pub input_settler: String,
 	/// OIF OutputSettler address on this chain.
@@ -86,6 +94,14 @@ pub struct ChainInfo {
 }
 
 impl ChainInfo {
+	/// Every endpoint to try, in order, starting with the primary.
+	pub fn rpc_candidates(&self) -> Vec<&str> {
+		std::iter::once(self.rpc_url.as_str())
+			.chain(self.rpc_fallbacks.iter().map(String::as_str))
+			.filter(|u| !u.trim().is_empty())
+			.collect()
+	}
+
 	/// CAIP-2 identifier, e.g. `eip155:84532`.
 	pub fn caip2(&self) -> String {
 		format!("eip155:{}", self.chain_id)
@@ -141,6 +157,7 @@ impl ChainRegistry {
 				chain_id: 11155420,
 				name: "optimism-sepolia".into(),
 				rpc_url: "https://sepolia.optimism.io".into(),
+				rpc_fallbacks: vec!["https://optimism-sepolia-rpc.publicnode.com".into()],
 				input_settler: "0x9EF00F018b4afDCAa89093EF3015E6D918a58003".into(),
 				output_settler: "0xBE85Bb9ADb91D42fa148dE3a929BE1b9C46270A5".into(),
 				oracle: "0x309eAdeDfB7b7Da32b8714a9AA950c8B02924a8e".into(),
@@ -160,6 +177,7 @@ impl ChainRegistry {
 				chain_id: 84532,
 				name: "base-sepolia".into(),
 				rpc_url: "https://sepolia.base.org".into(),
+				rpc_fallbacks: vec!["https://base-sepolia-rpc.publicnode.com".into()],
 				input_settler: "0xBE85Bb9ADb91D42fa148dE3a929BE1b9C46270A5".into(),
 				output_settler: "0x9EF00F018b4afDCAa89093EF3015E6D918a58003".into(),
 				oracle: "0x309eAdeDfB7b7Da32b8714a9AA950c8B02924a8e".into(),
@@ -172,6 +190,7 @@ impl ChainRegistry {
 				chain_id: 11155111,
 				name: "ethereum-sepolia".into(),
 				rpc_url: "https://ethereum-sepolia-rpc.publicnode.com".into(),
+				rpc_fallbacks: vec!["https://sepolia.gateway.tenderly.co".into()],
 				input_settler: "0x1CC9260E285C2C8AC8D2E7102F3978056Ec1d0a8".into(),
 				output_settler: "0x52602D7cc3D833F5d28ee6D01C7F82C9b2322e10".into(),
 				oracle: "0x306766B063383DF67035465BA883c46bBCf6254c".into(),
@@ -184,6 +203,7 @@ impl ChainRegistry {
 				chain_id: 80002,
 				name: "polygon-amoy".into(),
 				rpc_url: "https://rpc-amoy.polygon.technology".into(),
+				rpc_fallbacks: vec!["https://polygon-amoy-bor-rpc.publicnode.com".into()],
 				input_settler: "0x1CC9260E285C2C8AC8D2E7102F3978056Ec1d0a8".into(),
 				output_settler: "0x52602D7cc3D833F5d28ee6D01C7F82C9b2322e10".into(),
 				oracle: "0x306766B063383DF67035465BA883c46bBCf6254c".into(),
@@ -197,6 +217,7 @@ impl ChainRegistry {
 				chain_id: 97,
 				name: "bsc-testnet".into(),
 				rpc_url: "https://bsc-testnet-rpc.publicnode.com".into(),
+				rpc_fallbacks: vec!["https://data-seed-prebsc-1-s1.binance.org:8545".into()],
 				input_settler: "0x1CC9260E285C2C8AC8D2E7102F3978056Ec1d0a8".into(),
 				output_settler: "0x52602D7cc3D833F5d28ee6D01C7F82C9b2322e10".into(),
 				oracle: "0xd31b6A3b46Bfd45AA629E8739ff35C032d2AE622".into(),
@@ -332,6 +353,33 @@ mod tests {
 	/// signal the escrow client uses to refuse a chain outright, so a
 	/// plausible-looking dummy would turn "we cannot settle here" into
 	/// "we tried to settle and the call reverted".
+	/// Every chain must offer more than one endpoint.
+	///
+	/// With a single RPC, an outage stops escrow releases on that chain
+	/// entirely — they fail and retry rather than paying anyone, for as
+	/// long as it lasts. A BNB deploy died exactly this way, on a DNS
+	/// lookup for a host that resolved fine a minute later.
+	#[test]
+	fn every_chain_has_a_fallback_rpc() {
+		for chain in ChainRegistry::testnet_default().iter() {
+			let candidates = chain.rpc_candidates();
+			assert!(
+				candidates.len() >= 2,
+				"{} has {} RPC endpoint(s); one outage stops settlement there",
+				chain.name,
+				candidates.len()
+			);
+			for url in &candidates {
+				assert!(url.starts_with("https://"), "{} has a non-https RPC: {url}", chain.name);
+			}
+			// A duplicate is not a fallback.
+			let mut seen = candidates.clone();
+			seen.sort_unstable();
+			seen.dedup();
+			assert_eq!(seen.len(), candidates.len(), "{} repeats an RPC endpoint", chain.name);
+		}
+	}
+
 	#[test]
 	fn giftcard_addresses_are_either_a_real_address_or_absent() {
 		let reg = ChainRegistry::testnet_default();
