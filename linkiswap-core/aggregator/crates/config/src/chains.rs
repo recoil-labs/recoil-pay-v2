@@ -205,8 +205,8 @@ impl ChainRegistry {
 				// than a placeholder: the escrow client refuses a chain with
 				// no deployment, so a trade is turned away up front instead
 				// of failing at settlement time.
-				giftcard_escrow: String::new(),
-				merchant_bond: String::new(),
+				giftcard_escrow: "0x3fF82E48cdDEC15FEc1d66a5781969e7AcB4f54C".into(),
+				merchant_bond: "0x004cab0AA106cbA41AB8d049D722225F5461054c".into(),
 				// A 6-decimal MockERC20, deliberately matching the other
 				// testnets. Real BSC USDC (mainnet) has 18 decimals — do not
 				// copy this entry's decimals when adding chain 56.
