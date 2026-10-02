@@ -20,13 +20,16 @@ describe('ERC-7930 interop addresses', () => {
     expect(interopAddress(56, BSC_USDC)).toBe('0x000100000138148ac76a51cc950d9822d68b83fe1ad97b32cd580d');
   });
 
-  it.each(PREFIXES)('encodes the %s (%i) chain reference', (_, chainId, prefix) => {
-    const encoded = interopAddress(chainId, BSC_USDC);
-    expect(encoded.startsWith(prefix + '14')).toBe(true);
-    expect(encoded).toHaveLength(prefix.length + 2 + 40);
-  });
+  it.each(PREFIXES)(
+    'encodes the %s (%i) chain reference',
+    (_: string, chainId: number, prefix: string) => {
+      const encoded = interopAddress(chainId, BSC_USDC);
+      expect(encoded.startsWith(prefix + '14')).toBe(true);
+      expect(encoded).toHaveLength(prefix.length + 2 + 40);
+    },
+  );
 
-  it.each(PREFIXES)('round-trips on %s (%i)', (_, chainId) => {
+  it.each(PREFIXES)('round-trips on %s (%i)', (_: string, chainId: number) => {
     const decoded = fromInteropAddress(interopAddress(chainId, BSC_USDC));
     expect(decoded.chainId).toBe(chainId);
     expect(decoded.address).toBe(BSC_USDC.toLowerCase());
