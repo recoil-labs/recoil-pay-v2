@@ -17,6 +17,11 @@
 #   ./deploy-testnet.sh
 #
 # Optional:
+#   CHAINS=97                only these chain ids, comma separated.
+#                            Defaults to every chain below. Use this when
+#                            adding a chain — a bare re-run deploys FRESH
+#                            contracts everywhere, and the old ones stay in
+#                            the registry holding live escrows.
 #   ATTESTOR_ADDRESS=0x...   defaults to the deployer's own address.
 #                            Fine on testnet. On mainnet make it a separate
 #                            key: the deploy key lives on a laptop, the
@@ -65,10 +70,23 @@ forge test
 
 RESULTS=""
 
+WANTED="${CHAINS:-}"
+
+wanted() {
+    [ -z "$WANTED" ] && return 0
+    case ",$WANTED," in *",$1,"*) return 0 ;; *) return 1 ;; esac
+}
+
 deploy_to() {
     chain_id="$1"
     name="$2"
     rpc="$3"
+
+    if ! wanted "$chain_id"; then
+        echo
+        echo "==> $name ($chain_id) — not in CHAINS, skipping"
+        return 0
+    fi
 
     echo
     echo "==> $name ($chain_id)"
@@ -109,10 +127,15 @@ deploy_to() {
 
 deploy_to 84532    "base-sepolia"     "https://sepolia.base.org"
 deploy_to 11155420 "optimism-sepolia" "https://sepolia.optimism.io"
+deploy_to 97       "bsc-testnet"      "https://bsc-testnet-rpc.publicnode.com"
 
 if [ -z "$RESULTS" ]; then
     echo >&2
-    echo "Nothing deployed — no chain had gas. Fund $DEPLOYER and re-run." >&2
+    if [ -n "$WANTED" ]; then
+        echo "Nothing deployed — no selected chain had gas. Fund $DEPLOYER and re-run." >&2
+    else
+        echo "Nothing deployed — no chain had gas. Fund $DEPLOYER and re-run." >&2
+    fi
     exit 1
 fi
 
