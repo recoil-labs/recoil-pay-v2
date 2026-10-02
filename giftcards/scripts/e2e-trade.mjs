@@ -132,11 +132,15 @@ const payout = (FACE_MINOR * BigInt(Math.round(Number(RATE) * 1e6)) * unit) / (1
 
 // ── 2. gas + balance ─────────────────────────────────────────────────────
 say('Checking balances');
-for (const [who, acct] of [['merchant', merchant], ['user', user]]) {
-  const gas = await pub.getBalance({ address: acct.address });
-  if (gas === 0n) die(`${who} ${acct.address} has no Base Sepolia ETH for gas`);
-  ok(`${who} gas ${gas} wei`);
-}
+// Only the funder transacts. This is the merchant-buys direction, so the
+// merchant approves, stakes, and locks, while the user signs messages
+// off-chain and receives the payout — they never send a transaction and
+// need no gas at all. Requiring it from them would turn an empty throwaway
+// wallet into a blocker for no reason.
+const gas = await pub.getBalance({ address: merchant.address });
+if (gas === 0n) die(`merchant ${merchant.address} has no ${CHAIN.name} ETH for gas`);
+ok(`merchant gas ${gas} wei`);
+ok(`user needs no gas — it only signs and receives`);
 const usdcBal = await pub.readContract({
   address: usdc.address, abi: ERC20, functionName: 'balanceOf', args: [merchant.address],
 });
