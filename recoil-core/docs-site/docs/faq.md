@@ -1,6 +1,6 @@
 ---
 title: FAQ
-sidebar_position: 7
+sidebar_position: 8
 ---
 
 # Frequently asked questions
@@ -58,6 +58,8 @@ An independent operator that fulfills your intent. Solvers:
 - Compete with each other on price — RecoilPay shows you the best quote.
 
 You never interact with a solver directly. The aggregator picks the best one for you.
+
+Curious what's expected of solvers, or want to run one? See [Operators and solvers](./operators).
 
 ## Can I chain multiple actions in one sentence?
 
