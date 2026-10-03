@@ -8,6 +8,7 @@ const sidebars: SidebarsConfig = {
     'supported-networks',
     'wallet-setup',
     'fees-and-timing',
+    'operators',
     'faq',
     'troubleshooting',
   ],

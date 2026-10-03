@@ -22,7 +22,7 @@ For a send, the same rules apply.
 
 ## What the solver earns
 
-Solvers are independent operators competing for your business. On mainnet, each quote includes a spread and a fee — the difference between what you pay and what you receive. RecoilPay fetches quotes from every available solver in parallel and shows you the best one.
+Solvers are independent operators competing for your business. On mainnet, each quote includes a spread and a fee — the difference between what you pay and what you receive. RecoilPay fetches quotes from every available solver in parallel and shows you the best one. [Operators and solvers](./operators) covers how quotes are priced and chosen.
 
 On testnet, spreads are effectively zero. The confirm card will show you the exact receive amount before you sign, so you always know what you're getting.
 

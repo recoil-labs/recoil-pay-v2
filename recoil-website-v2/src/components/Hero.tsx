@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 
 import IntentBar from './IntentBar';
 import { CHAIN_ALIASES } from '../intent/registry';
@@ -72,10 +72,6 @@ function useTypewriter(
  *  the number can never drift from what the input actually accepts. */
 const CHAIN_COUNT = new Set(Object.values(CHAIN_ALIASES).map(c => c.id)).size;
 
-/** Widest verb, so the chip is sized once and the line never reflows while
- *  a word types in or out. */
-const LONGEST = Math.max(...VERBS.map(v => v.length));
-
 export default function Hero() {
   const { t } = useTranslation();
   const { text, reduced, holding } = useTypewriter(VERBS);
@@ -105,7 +101,7 @@ export default function Hero() {
         </p>
 
         <h1
-          className="mt-5 max-w-[24ch] font-sans text-[clamp(36px,6.4vw,76px)] text-app-text"
+          className="mt-5 max-w-[26ch] text-balance font-sans text-[clamp(36px,6.4vw,76px)] text-app-text"
           style={{
             fontWeight: 'var(--font-heading-weight)' as unknown as number,
             lineHeight: 'var(--leading-hero)',
@@ -113,16 +109,14 @@ export default function Hero() {
           }}
         >
           {t('hero.lead', 'Tell your wallet to')}{' '}
-          {/* Left-aligned in a fixed-width slot: a word types from its left
-              edge, so centring would shift the whole word on every keystroke.
+          {/* Sized to the current word, not the widest verb: a reserved slot
+              left a hole after short words and pulled the centred line off
+              centre. The line re-centres as a word types in, which is the
+              price of centring.
               The caret only blinks while the word is holding — while typing
               or erasing it stays solid, the way a real cursor behaves. */}
-          {/* Bare text, no chip: the word types directly into the sentence
-              in the accent colour. The fixed-width slot still reserves the
-              widest verb so the rest of the line never reflows. */}
           <span
             className="inline-flex items-baseline align-baseline leading-none text-primary"
-            style={{ minWidth: `${LONGEST + 0.6}ch` }}
             aria-live="polite"
             aria-label={text}
           >
@@ -133,8 +127,18 @@ export default function Hero() {
                 className={`ms-[0.06em] inline-block w-[0.06em] self-stretch rounded-sm bg-primary ${holding ? 'hero-caret' : ''}`}
               />
             )}
-          </span>{' '}
-          {t('hero.tail', 'and it handles the rest')}
+          </span>
+          {/* Its own line, so the tail centres on its own instead of
+              wrapping wherever the typed word happens to end. The brand
+              takes the verb's accent colour; it's tagged in the string so
+              a translation can move it to fit its word order. */}
+          <span className="block">
+            <Trans
+              i18nKey="hero.tail"
+              defaults="and <brand>RecoilPay</brand> handles the rest"
+              components={{ brand: <span className="text-primary" /> }}
+            />
+          </span>
         </h1>
 
         <p

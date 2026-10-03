@@ -36,6 +36,7 @@ We wrote these for anyone using the RecoilPay app — no crypto background requi
 | See what chains and tokens work today | [Supported networks](./supported-networks) |
 | Set up my wallet | [Wallet setup](./wallet-setup) |
 | Understand fees and how long it takes | [Fees and timing](./fees-and-timing) |
+| Learn who fills my swaps, or become a solver | [Operators and solvers](./operators) |
 | Answer a specific question | [FAQ](./faq) |
 | Fix something that isn't working | [Troubleshooting](./troubleshooting) |
 | **Build on RecoilPay** | [Integrate RecoilPay](./integrate/) |
